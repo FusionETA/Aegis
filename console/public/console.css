@@ -54,17 +54,17 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
 .brand b { font-family: var(--font-display); font-size: 21px; font-weight: 700; letter-spacing: -0.02em; }
 .brand svg { width: 34px; height: 24px; flex: none; }
-nav { display: flex; gap: 4px; flex-wrap: wrap; }
-nav a { text-decoration: none; color: var(--muted); font-weight: 500; padding: 7px 12px; border-radius: 8px; }
-nav a:hover { color: var(--ink); background: var(--sunk); }
-nav a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); }
+.views { display: flex; gap: 4px; flex-wrap: wrap; }
+.views a { text-decoration: none; color: var(--muted); font-weight: 500; padding: 7px 12px; border-radius: 8px; }
+.views a:hover { color: var(--ink); background: var(--sunk); }
+.views a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); }
 .who { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--muted); }
 .who a { color: var(--muted); text-decoration: none; padding: 6px 10px; border-radius: 8px; }
 .who a:hover { color: var(--ink); background: var(--sunk); }
 .who a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); }
 
 main { margin-top: 24px; }
-main > section { display: grid; gap: 22px; align-content: start; }
+main > section { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; align-content: start; }
 .lead { display: grid; gap: 4px; min-width: 0; }
 .lead p { color: var(--muted); }
 
@@ -77,7 +77,8 @@ main > section { display: grid; gap: 22px; align-content: start; }
 .crumbs a { color: var(--muted); }
 .crumbs a:hover { color: var(--accent); }
 .group { display: grid; gap: 10px; }
-.group-head { display: flex; align-items: baseline; gap: 10px; }
+.group-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.group-head .hint { white-space: nowrap; }
 .group-head a { margin-left: auto; font-size: 14px; }
 .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
 .stat { background: var(--surface); padding: 14px 16px; display: grid; gap: 4px; align-content: start; min-width: 0; }
@@ -170,7 +171,7 @@ td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* cards and forms (Setup, People, Account) */
 .cards { display: grid; gap: 18px; }
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; }
 .card > header { display: grid; gap: 3px; }
 .card > header p { color: var(--muted); font-size: 14px; }
 .dests { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }

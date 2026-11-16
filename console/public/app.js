@@ -67,6 +67,8 @@ const appName = (app) => status?.checks.find((c) => c.app === app)?.appName || a
 const appsOf = () => [...new Set(status.checks.map((c) => c.app).filter(Boolean))];
 const label = (t) => `${t.channel}${t.to ? `:${t.to}` : ''}`;
 const appInfo = (app) => status.apps.find((x) => x.app === app) || { alerts: status.defaultAlerts, reports: { enabled: false, targets: [], problems: [] } };
+// "[nginx] 16/11/2026 16:20:01 OK — …" -> "OK — …": the run's time is already in its own column.
+const tidy = (s) => String(s || '').replace(/^\[[\w-]+\]\s*(\d\d\/\d\d\/\d{4} \d\d:\d\d:\d\d\s*)?/, '');
 const chipsRO = (targets) => targets.map((t) => `<span class="dest ro ${t.ok ? '' : 'bad'}"${t.ok ? '' : ' title="This channel isn\'t set up on the server"'}>${esc(label(t))}</span>`).join('');
 
 // ---------- Checks ----------
@@ -164,7 +166,7 @@ function renderCheck(action) {
             <td class="num">${esc(when(runDate(r.start)))}</td>
             <td>${r.skipped ? '<span class="pill idle">Skipped</span>' : r.exit ? '<span class="pill fail">Failed</span>' : '<span class="pill pass">Passed</span>'}</td>
             <td class="num">${esc(took(r.seconds))}</td>
-            <td class="sum"><span title="${esc(r.skipped || r.summary)}">${esc(r.skipped || r.summary)}</span>${r.retried ? '<small>Retried once</small>' : ''}</td>
+            <td class="sum"><span title="${esc(r.skipped || tidy(r.summary))}">${esc(r.skipped || tidy(r.summary))}</span>${r.retried ? '<small>Retried once</small>' : ''}</td>
             <td>${r.skipped ? '' : `<button class="btn small" data-act="report" data-action="${esc(c.action)}" data-start="${esc(r.start)}">Report</button>`}</td>
           </tr>`).join('') || '<tr><td colspan="5" class="muted">No runs in the logs yet.</td></tr>'}</tbody>
         </table></div>
@@ -328,6 +330,9 @@ async function renderActivity() {
   v.innerHTML = `${head}<p class="muted">Loading…</p>`;
   try {
     const rows = await api('/api/audit');
+    if (!status) await refreshStatus();
+    const names = new Map((status?.checks || []).flatMap((c) => [[c.app, c.appName], [c.action, c.name]]).filter(([k, n]) => k && n));
+    const target = (t) => String(t || '').replace(/^[A-Za-z0-9_/-]+/, (k) => names.get(k) || k);
     const days = [];
     for (const r of rows) {
       const k = dayKey(new Date(r.at));
@@ -338,7 +343,7 @@ async function renderActivity() {
       <div class="tbl-wrap"><table class="activity"><tbody>${d.rows.map((r) => `<tr>
         <td class="num">${esc(clock(new Date(r.at)))}</td>
         <td class="who-cell" title="${esc(r.actor)}">${esc(String(r.actor).replace(/\s*<[^>]*>$/, ''))}</td>
-        <td>${esc(r.action[0].toUpperCase() + r.action.slice(1))}${r.target || r.detail ? `<br><span class="hint mono">${esc([r.target, r.detail].filter(Boolean).join(' · '))}</span>` : ''}</td>
+        <td>${esc(r.action[0].toUpperCase() + r.action.slice(1))}${r.target || r.detail ? `<br><span class="hint mono">${esc([target(r.target), r.detail].filter(Boolean).join(' · '))}</span>` : ''}</td>
       </tr>`).join('')}</tbody></table></div></section>`).join('') || '<p class="muted">Nothing yet.</p>'}`;
   } catch (err) { v.innerHTML = `${head}<p class="msg err">${esc(err.message)}</p>`; }
 }
