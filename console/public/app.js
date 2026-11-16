@@ -488,7 +488,9 @@ function renderAccount() {
         <label>Type it again<input type="password" name="again" autocomplete="new-password" required></label>
         <div class="actions"><button class="btn primary" type="submit">Change password</button></div>
         <p class="msg" id="pw-msg" hidden></p>
-      </form></section>`;
+      </form></section>
+    <section class="card narrow"><header><h2>Sign out</h2><p>Signs you out in this browser.</p></header>
+      <div class="actions"><button class="btn" type="button" data-act="signout">Sign out</button></div></section>`;
 }
 
 // ---------- events ----------
@@ -730,10 +732,12 @@ document.addEventListener('submit', async (e) => {
 
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#overlay').hidden) closeOverlay(); });
 $('#overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') closeOverlay(); });
-$('#signout').addEventListener('click', async () => {
+async function signOut() {
   await api('/api/logout', { method: 'POST', body: {} }).catch(() => {});
   location.href = '/login';
-});
+}
+$('#signout').addEventListener('click', signOut);
+document.addEventListener('click', (e) => { if (e.target.closest('[data-act="signout"]')) signOut(); });
 
 // ---------- routing ----------
 const VIEWS = ['checks', 'check', 'apps', 'channels', 'activity', 'people', 'account'];
@@ -767,7 +771,9 @@ window.addEventListener('hashchange', route);
 
 (async () => {
   try { me = await api('/api/me'); } catch { return; }
-  $('#who').textContent = `${me.name}${me.role === 'admin' ? ' · Admin' : ''}`;
+  const initials = me.name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+  $('#who').innerHTML = `<span class="initials" aria-hidden="true">${esc(initials)}</span><span class="who-name">${esc(me.name)}${me.role === 'admin' ? ' · Admin' : ''}</span>`;
+  $('#who').setAttribute('aria-label', `Your account: ${me.name}`);
   $('nav.views a[data-view="people"]').hidden = me.role !== 'admin';
   route();
   await refreshStatus();
