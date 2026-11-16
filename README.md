@@ -61,6 +61,12 @@ log of every change.
 - Pausing writes `config/paused/<app>-<action>`, which `run.sh` honours. Display names
   and steps come from `checks.json`; a check missing there shows with its bare action
   and gets no Apps page.
+- Admins can also change a check's schedule (presets or cron, at least 5 minutes apart;
+  the agent edits only that check's crontab line and keeps the last 30 crontabs in
+  `config/crontab-backups/`), retire a check (its line is removed and remembered in
+  `config/retired/`, so "Bring back" restores it), and set up channels on the Channels
+  page: Bitrix webhook and default chat, SMTP, Telegram, Slack, Teams, Google Chat and
+  the generic webhook. Secrets are write-only. Members can reschedule read-only checks.
 - The Apps page writes these `.env` keys through the agent, the same ones you'd set by hand:
   `<APP>_NOTIFY`, `<APP>_REPORTS`, `<APP>_REPORTS_ENABLED` and the app login
   (`<APP>_URL`, `_LOGIN_URL`, `_EMAIL`, `_USERNAME`, `_PASSWORD`). Channel credentials

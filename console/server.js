@@ -175,6 +175,19 @@ async function api(req, res, url, user) {
     store.audit(actor, paused ? 'paused check' : 'resumed check', action);
     return send(res, 200, r);
   }
+  if (p === '/api/checks/schedule' && m === 'POST') {
+    const { action, schedule } = await body(req);
+    const r = await agent('setSchedule', { action, schedule: schedule === null ? null : String(schedule ?? ''), asAdmin: user.role === 'admin' }, actor);
+    store.audit(actor, r.schedule ? 'changed schedule' : 'removed schedule', action, r.schedule ? `${r.text} (${r.schedule})` : 'on demand only');
+    return send(res, 200, r);
+  }
+  if (p === '/api/checks/retire' && m === 'POST') {
+    need('admin');
+    const { action, retired } = await body(req);
+    const r = await agent('setRetired', { action, retired: !!retired, asAdmin: true }, actor);
+    store.audit(actor, retired ? 'retired check' : 'brought back check', action);
+    return send(res, 200, r);
+  }
   if (p === '/api/checks/run' && m === 'POST') {
     const { action } = await body(req);
     const r = await agent('runNow', { action }, actor);
@@ -210,6 +223,20 @@ async function api(req, res, url, user) {
     }
   }
   if (p === '/api/channels' && m === 'GET') return send(res, 200, await agent('channels', {}, actor));
+  if ((mm = p.match(/^\/api\/channels\/([a-z]+)(\/test)?$/)) && m === 'POST') {
+    need('admin');
+    const [, channel, test] = mm;
+    if (test) {
+      const { to } = await body(req);
+      const r = await agent('testChannel', { channel, to: to ? String(to) : '', asAdmin: true }, actor);
+      store.audit(actor, 'sent a channel test', channel, to ? String(to).slice(0, 120) : '');
+      return send(res, 200, r);
+    }
+    const { values } = await body(req);
+    const r = await agent('setChannel', { channel, values, asAdmin: true }, actor);
+    store.audit(actor, 'changed channel settings', channel, Object.entries(values || {}).map(([k, v]) => (k === 'BITRIX_DIALOG_ID' ? `default chat ${v}` : v === null ? `${k} removed` : k)).join(', '));
+    return send(res, 200, r);
+  }
   if (p === '/api/audit' && m === 'GET') return send(res, 200, store.recentAudit(300));
 
   // --- people (admins)

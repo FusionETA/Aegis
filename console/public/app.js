@@ -73,6 +73,7 @@ const chipsRO = (targets) => targets.map((t) => `<span class="dest ro ${t.ok ? '
 
 // ---------- Checks ----------
 function stateOf(c) {
+  if (c.retired) return ['idle', 'Retired'];
   if (c.paused) return ['idle', 'Paused'];
   if (c.running) return ['warn', 'Running now'];
   if (c.state?.status === 'fail') return ['fail', 'Failing'];
@@ -89,7 +90,8 @@ const chev = '<svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="
 function renderChecks() {
   const v = $('#view-checks');
   if (!status) { v.innerHTML = '<p class="muted">Loading checks…</p>'; return; }
-  const checks = status.checks;
+  const checks = status.checks.filter((c) => !c.retired);
+  const retired = status.checks.filter((c) => c.retired);
   const failing = checks.filter((c) => c.state?.status === 'fail' && !c.paused);
   const paused = checks.filter((c) => c.paused);
   const next = checks.filter((c) => c.next).sort((a, b) => a.next.localeCompare(b.next))[0];
@@ -107,7 +109,10 @@ function renderChecks() {
       <div class="ledger" role="list">
         <div class="ledger-head" aria-hidden="true"><span>Status</span><span>Check</span><span>Schedule</span><span>Last run</span><span>Last 5 runs</span><span></span></div>
         ${list.map(rowHTML).join('')}
-      </div></section>`).join('')}`;
+      </div></section>`).join('')}
+    ${retired.length ? `<section class="group" aria-label="Retired checks">
+      <div class="group-head"><h2>Retired</h2><span class="hint">${plural(retired.length, 'check')} · not running</span></div>
+      <div class="ledger" role="list">${retired.map(rowHTML).join('')}</div></section>` : ''}`;
 }
 
 function rowHTML(c) {
@@ -116,7 +121,7 @@ function rowHTML(c) {
   return `<div class="row" role="listitem"><a class="row-main" href="#check/${enc(c.action)}">
       <span class="c-status"><span class="pill ${cls}">${text}</span></span>
       <span class="name"><b>${esc(c.name)}${c.changesData ? '<span class="tag write">Changes data</span>' : ''}</b><small>${esc(c.site || c.action)}</small></span>
-      <span class="cell c-sched">${esc(c.scheduleText)}<small>${c.paused ? 'Paused' : c.next ? `Next: ${esc(when(new Date(c.next)))}` : 'Runs when started'}</small></span>
+      <span class="cell c-sched">${c.retired ? 'Retired' : esc(c.scheduleText)}<small>${c.retired ? 'Not running' : c.paused ? 'Paused' : c.next ? `Next: ${esc(when(new Date(c.next)))}` : 'Runs when started'}</small></span>
       <span class="cell c-last">${last ? esc(when(runDate(last.start))) : '—'}<small>${last ? `${last.exit ? 'Failed' : 'Passed'} · ${esc(took(last.seconds))}` : ''}</small></span>
       ${eyes(c)}
       ${chev}
@@ -137,6 +142,8 @@ function renderCheck(action) {
   const runs14 = days.reduce((n, d) => n + d.runs, 0), failed14 = days.reduce((n, d) => n + d.failed, 0);
   const frequent = c.totalRuns > 60;
   const runNote = c.changesData ? 'Run now is off because this check changes data. It only runs on its schedule.' : c.running ? 'It\'s running right now.' : '';
+  const admin = me?.role === 'admin';
+  const canSchedule = !c.retired && (!c.changesData || admin);
   const stateLine = !s ? 'No result saved yet'
     : s.status === 'fail' ? `Since ${esc(stateWhen(s.since))} · ${plural(s.failedRuns, 'failed run')} in a row · last alert ${esc(s.lastAlert)}`
       : `Since ${esc(stateWhen(s.since))}`;
@@ -144,19 +151,22 @@ function renderCheck(action) {
     <nav class="crumbs" aria-label="Breadcrumb"><a href="#checks">Checks</a><span aria-hidden="true">/</span>${c.app ? `<a href="#apps/${esc(c.app)}">${esc(appName(c.app))}</a><span aria-hidden="true">/</span>` : ''}<span aria-current="page">${esc(c.name)}</span></nav>
     <div class="page-head">
       <div class="lead"><h1>${esc(c.name)}${c.changesData ? '<span class="tag write">Changes data</span>' : ''}</h1><p>${esc(c.description || c.site)}</p></div>
-      <div class="actions">
-        <button class="btn primary" data-act="run" data-action="${esc(c.action)}" ${c.changesData || c.paused || c.running ? 'disabled' : ''}>Run now</button>
-        <button class="btn" data-act="pause" data-action="${esc(c.action)}" data-paused="${c.paused ? '1' : ''}">${c.paused ? 'Resume' : 'Pause'}</button>
+      <div class="actions">${c.retired
+        ? (admin ? `<button class="btn primary" data-act="unretire" data-action="${esc(c.action)}">Bring back</button>` : '')
+        : `<button class="btn primary" data-act="run" data-action="${esc(c.action)}" ${c.changesData || c.paused || c.running ? 'disabled' : ''}>Run now</button>
+        <button class="btn" data-act="pause" data-action="${esc(c.action)}" data-paused="${c.paused ? '1' : ''}">${c.paused ? 'Resume' : 'Pause'}</button>`}
       </div>
     </div>
+    ${c.retired ? `<p class="msg warn">Retired by ${esc(c.retired.by || 'someone')}${c.retired.at ? ` on ${esc(when(new Date(c.retired.at)))}` : ''}. It doesn't run any more; its code and history are kept.${admin ? ` Bring back restores its schedule${c.retired.schedule ? ` (${esc(describeCron(c.retired.schedule))})` : ''}.` : ''}</p>` : ''}
     ${c.paused ? `<p class="msg warn">Paused by ${esc(c.paused.by || 'someone')}${c.paused.at ? ` on ${esc(when(new Date(c.paused.at)))}` : ''}. It won't run until it's resumed.</p>` : ''}
     ${runNote ? `<p class="hint">${esc(runNote)}</p>` : ''}
     <div class="stats">
       <div class="stat"><span>Status</span><b><span class="pill ${cls}">${text}</span></b><small>${stateLine}</small></div>
-      <div class="stat"><span>Schedule</span><b>${esc(c.scheduleText)}</b><small>${c.paused ? 'Paused' : c.next ? `Next: ${esc(when(new Date(c.next)))}` : 'Runs when started'}</small></div>
+      <div class="stat"><span>Schedule</span><b>${c.retired ? 'Retired' : esc(c.scheduleText)}</b><small>${c.retired ? 'Not running' : c.paused ? 'Paused' : c.next ? `Next: ${esc(when(new Date(c.next)))}` : 'Runs when started'}${canSchedule ? ' · <button class="link-btn" type="button" data-act="sched-open">Change</button>' : ''}</small></div>
       <div class="stat"><span>Last run</span><b>${last ? esc(when(runDate(last.start))) : '—'}</b><small>${last ? `${last.exit ? 'Failed' : 'Passed'} · took ${esc(took(last.seconds))}` : 'No runs yet'}</small></div>
       <div class="stat"><span>Last 14 days</span><b>${plural(runs14, 'run')}</b><small>${failed14 ? `${failed14} failed` : 'None failed'}</small></div>
     </div>
+    ${canSchedule ? schedEditor(c) : ''}
     <div class="split">
       <section class="card">
         <header><h2>${frequent ? 'Latest runs' : 'Run history'}</h2><p>Open a report to see every step${c.noBrowser ? '' : ', and the screenshot when a run failed'}.</p></header>
@@ -181,9 +191,56 @@ function renderCheck(action) {
         <div class="side-sec"><h3>Failure alerts go to</h3><div class="dests">${chipsRO(info.alerts.targets) || '<span class="muted">Nowhere</span>'}${info.alerts.source.startsWith('default') ? '<span class="hint">default chat</span>' : ''}</div></div>
         <div class="side-sec"><h3>Run reports</h3>${info.reports.enabled ? `<div class="dests">${chipsRO(info.reports.targets)}</div><p class="hint">Every run's report, passed or failed.</p>` : '<p class="muted">Off</p>'}</div>
         ${c.app ? `<a class="btn" href="#apps/${esc(c.app)}">Change notifications or login</a>` : ''}
-        <p class="hint">Runs as <span class="mono">run.sh ${esc(c.action)}</span>${c.changesData ? '. It changes data, so it never retries.' : ''}</p>
+        <p class="hint">Runs as <span class="mono">run.sh ${esc(c.action)}</span>${c.changesData ? '. It changes data, so it never retries.' : ''}${c.changesData && !admin ? ' Only an admin can change its schedule.' : ''}</p>
+        ${admin && !c.retired ? `<div class="side-sec retire"><button class="btn small danger" type="button" data-act="retire" data-action="${esc(c.action)}">Retire this check</button><p class="hint">Stops it for good and removes its schedule. Its code and history stay, and you can bring it back.</p></div>` : ''}
       </aside>
     </div>`;
+}
+
+// ---------- schedule editor ----------
+// Cron in words, as the agent says it (console/agent.js describeCron).
+function describeCron(expr) {
+  const [mi, h, dom, mon, dow] = String(expr).split(/\s+/);
+  const days = dow === '*' ? 'Every day' : dow === '1-5' ? 'Mon–Fri' : dow === '0,6' || dow === '6,0' ? 'Weekends' : `Days ${dow}`;
+  if (/^\*\/\d+$/.test(mi) && h === '*') return `Every ${mi.slice(2)} min${dow === '*' ? ', all days' : `, ${days}`}`;
+  if (mi === '0' && h === '*') return `Every hour${dow === '*' ? ', all days' : `, ${days}`}`;
+  if (/^\d+$/.test(mi) && /^\d+$/.test(h) && dom === '*' && mon === '*') return `${days} ${h.padStart(2, '0')}:${mi.padStart(2, '0')}`;
+  return expr;
+}
+function schedEditor(c) {
+  const cur = c.schedule || '';
+  let mode = cur ? 'custom' : 'none', time = '09:15', every = '15', days = '*', m;
+  if ((m = cur.match(/^(\d+) (\d+) \* \* (1-5|\*)$/))) { mode = m[3] === '*' ? 'daily' : 'weekdays'; time = `${m[2].padStart(2, '0')}:${m[1].padStart(2, '0')}`; }
+  else if ((m = cur.match(/^\*\/(5|10|15|20|30) \* \* \* (1-5|\*)$/))) { mode = 'every'; [, every, days] = m; }
+  else if ((m = cur.match(/^0 \* \* \* (1-5|\*)$/))) { mode = 'every'; every = '60'; days = m[1]; }
+  const opt = (v, text, sel) => `<option value="${v}" ${v === sel ? 'selected' : ''}>${text}</option>`;
+  return `<section class="card narrow" id="sched-editor" hidden>
+    <header><h2>Change schedule</h2><p>Times are Malaysia time (MYT). Runs must be at least 5 minutes apart. The change applies from the next run and is recorded in Activity.${c.changesData ? ' This check changes data: every run clocks the account in or out.' : ''}</p></header>
+    <form class="form" data-act="sched-save" data-action="${esc(c.action)}">
+      <label>Runs<select name="mode">${opt('weekdays', 'On weekdays, at a set time', mode)}${opt('daily', 'Every day, at a set time', mode)}${opt('every', 'Every few minutes', mode)}${opt('custom', 'Custom (cron)', mode)}${opt('none', 'Only when started (no schedule)', mode)}</select></label>
+      <label data-for="weekdays daily">Time<input type="time" name="time" value="${time}" step="60"></label>
+      <label data-for="every">How often<select name="every">${['5', '10', '15', '20', '30', '60'].map((n) => opt(n, n === '60' ? 'Every hour' : `Every ${n} minutes`, every)).join('')}</select></label>
+      <label data-for="every">On<select name="days">${opt('*', 'All days', days)}${opt('1-5', 'Weekdays only', days)}</select></label>
+      <label data-for="custom">Cron<small>Five fields: minute, hour, day, month, weekday. For example 15 9 * * 1-5.</small><input type="text" name="cron" class="mono-input" value="${esc(mode === 'custom' ? cur : '')}" autocomplete="off"></label>
+      <p class="hint" data-preview></p>
+      <div class="actions"><button class="btn primary" type="submit">Save schedule</button><button class="btn" type="button" data-act="sched-close">Cancel</button></div>
+    </form></section>`;
+}
+// The form as a cron expression; null = no schedule, '' = incomplete.
+function schedFromForm(f) {
+  const d = Object.fromEntries(new FormData(f));
+  if (d.mode === 'none') return null;
+  if (d.mode === 'weekdays' || d.mode === 'daily') {
+    const [h, mi] = String(d.time || '').split(':').map(Number);
+    return Number.isInteger(h) && Number.isInteger(mi) ? `${mi} ${h} * * ${d.mode === 'weekdays' ? '1-5' : '*'}` : '';
+  }
+  if (d.mode === 'every') return d.every === '60' ? `0 * * * ${d.days}` : `*/${d.every} * * * ${d.days}`;
+  return String(d.cron || '').trim().replace(/\s+/g, ' ');
+}
+function syncSched(f) {
+  for (const l of f.querySelectorAll('[data-for]')) l.hidden = !l.dataset.for.split(' ').includes(f.mode.value);
+  const expr = schedFromForm(f);
+  $('[data-preview]', f).textContent = expr === null ? 'It will only run when someone presses Run now.' : expr ? `Will run: ${describeCron(expr)} (cron ${expr})` : '';
 }
 
 async function openReport(action, start) {
@@ -210,13 +267,18 @@ async function refreshStatus() {
   try {
     status = await api('/api/status');
     statusAt = new Date();
+    // Failing checks as a count on the Checks tab, like an unread badge.
+    const failing = status.checks.filter((c) => c.state?.status === 'fail' && !c.paused && !c.retired).length;
+    const badge = $('#fail-badge');
+    badge.hidden = !failing; badge.textContent = failing;
+    badge.setAttribute('aria-label', `${failing} failing`);
   } catch (err) {
     if (!status) $('#view-checks').innerHTML = `<p class="msg err">${esc(err.message)}</p>`;
     return;
   }
   const { v, arg } = parseHash();
   if (v === 'checks') renderChecks();
-  if (v === 'check') renderCheck(arg);
+  if (v === 'check' && $('#sched-editor')?.hidden !== false) renderCheck(arg);   // not while the schedule is being edited
 }
 
 // ---------- Apps ----------
@@ -248,11 +310,11 @@ async function loadApp(app) {
   const msgs = vol.perWeekday * Math.max(r.destinations.length, 1);
   box.innerHTML = `
     <section class="card">
-      <header><h2>Checks</h2><p>On means it runs on its schedule. Turn one off to pause it.</p></header>
+      <header><h2>Checks</h2><p>On means it runs on its schedule. Turn one off to pause it. Change when it runs on its own page.</p></header>
       <ul class="check-list">${checks.map((c) => `<li>
-        <label class="toggle"><input type="checkbox" data-act="pause-toggle" data-app="${esc(app)}" data-action="${esc(c.action)}" ${c.paused ? '' : 'checked'} aria-label="${esc(c.name)} is ${c.paused ? 'paused' : 'on'}">
-          <span><b>${esc(c.name)}</b><small>${c.paused ? '<span class="paused">Paused</span>' : esc(c.scheduleText)}</small></span></label>
-        <a href="#check/${enc(c.action)}">History</a></li>`).join('')}</ul>
+        ${c.retired ? `<span class="toggle"><span><b>${esc(c.name)}</b><small>Retired</small></span></span>` : `<label class="toggle"><input type="checkbox" data-act="pause-toggle" data-app="${esc(app)}" data-action="${esc(c.action)}" ${c.paused ? '' : 'checked'} aria-label="${esc(c.name)} is ${c.paused ? 'paused' : 'on'}">
+          <span><b>${esc(c.name)}</b><small>${c.paused ? '<span class="paused">Paused</span>' : esc(c.scheduleText)}</small></span></label>`}
+        <a href="#check/${enc(c.action)}">Details</a></li>`).join('')}</ul>
     </section>
 
     <section class="card">
@@ -264,7 +326,7 @@ async function loadApp(app) {
           <div class="dests">${usingDefault
             ? `${chipsRO(s.alerts.targets)}<span class="hint">default chat</span>`
             : s.notify.map((d, i) => chip('dest-remove', d, i, s.alerts.targets)).join('')}</div>
-          ${usingDefault ? '<p class="hint">Adding a destination replaces the default chat. Add the default chat too if it should keep getting them.</p>' : ''}
+          ${usingDefault ? '<p class="hint">Using the default chat. Adding a destination keeps the default chat in this list too; remove it if this app shouldn\'t alert there.</p>' : ''}
           ${s.alerts.problems.length ? `<p class="msg warn">${s.alerts.problems.map(esc).join('<br>')}</p>` : ''}
           <form class="inline-form" data-act="dest-add" data-app="${esc(app)}"><input type="text" class="mono-input" placeholder="bitrix:chat1234" aria-label="Add a failure-alert destination for ${esc(appName(app))}"><button class="btn" type="submit">Add</button></form>
           <div class="actions"><button class="btn small" type="button" data-act="test-alert" data-app="${esc(app)}">Send test alert</button></div>
@@ -299,27 +361,57 @@ async function loadApp(app) {
 }
 
 // ---------- Channels ----------
+const PLACEHOLDER = {
+  BITRIX_WEBHOOK_URL: 'https://fusioneta.bitrix24.com/rest/57/abc123…/', BITRIX_DIALOG_ID: 'chat6356',
+  SMTP_HOST: 'smtp.office365.com', SMTP_PORT: '587', SMTP_USER: 'argus@fusioneta.com', SMTP_FROM: 'Argus <argus@fusioneta.com>',
+  TELEGRAM_BOT_TOKEN: '123456789:AA…', SLACK_WEBHOOK_URL: 'https://hooks.slack.com/services/…', TEAMS_WEBHOOK_URL: 'https://….logic.azure.com/…',
+  GOOGLECHAT_WEBHOOK_URL: 'https://chat.googleapis.com/v1/spaces/…', WEBHOOK_URL: 'https://n8n.example.com/webhook/argus',
+};
+const TEST_TO = { bitrix: 'chat1234 or a user number (empty: the default chat)', email: 'you@fusioneta.com', telegram: 'Chat ID, e.g. -1001234567890' };
+
 async function renderChannels() {
   const v = $('#view-channels');
-  v.innerHTML = '<div class="lead"><h1>Channels</h1><p>Who Argus sends notifications as, per channel.</p></div><p class="muted">Checking each channel…</p>';
+  const admin = me?.role === 'admin';
+  const head = `<div class="lead"><h1>Channels</h1><p>Who Argus sends notifications as, per channel. Apps without their own list use the default chat.
+    ${admin ? 'Webhook URLs, tokens and passwords are saved on the server and never shown again.' : 'Admins set up and change channels.'}</p></div>`;
+  v.innerHTML = `${head}<p class="muted">Checking each channel…</p>`;
   let data;
-  try { data = await api('/api/channels'); } catch (err) { v.innerHTML += `<p class="msg err">${esc(err.message)}</p>`; return; }
+  try { data = await api('/api/channels'); } catch (err) { v.innerHTML = `${head}<p class="msg err">${esc(err.message)}</p>`; return; }
   const pill = (s) => ({ connected: '<span class="pill pass">Connected</span>', 'set-up': '<span class="pill pass">Set up</span>', error: '<span class="pill fail">Not working</span>' }[s] || '<span class="pill idle">Needs setup</span>');
   const ready = data.channels.filter((c) => c.status !== 'needs-setup');
   const rest = data.channels.filter((c) => c.status === 'needs-setup');
-  v.innerHTML = `<div class="lead"><h1>Channels</h1><p>Who Argus sends notifications as, per channel. Apps without their own list use the default destination. A new channel is set up on the server; ask an admin.</p></div>
-    <div class="cards">${ready.map((c) => `<section class="card channel">
+  const form = (c) => `<form class="form chan-form" data-act="chan-save" data-ch="${c.channel}" hidden>
+      ${c.fields.map((f) => `<label>${esc(f.label)}${f.secret ? `<small>${f.set ? `Saved${f.hint ? ` (${esc(f.hint)})` : ''}. Leave empty to keep it.` : 'Saved on the server and never shown again.'}</small>` : ''}
+        <input name="${f.key}" type="${f.secret ? 'password' : 'text'}" class="mono-input" autocomplete="off" data-was="${f.secret ? '' : esc(f.value || '')}" value="${f.secret ? '' : esc(f.value || '')}" placeholder="${esc(PLACEHOLDER[f.key] || '')}"></label>`).join('')}
+      <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" data-act="chan-close" data-ch="${c.channel}">Cancel</button>
+        ${c.status !== 'needs-setup' && c.channel !== 'bitrix' ? `<button class="btn danger" type="button" data-act="chan-clear" data-ch="${c.channel}">Remove channel</button>` : ''}</div>
+    </form>`;
+  const test = (c) => `<form class="inline-form" data-act="chan-test" data-ch="${c.channel}" hidden>
+      ${TEST_TO[c.channel] ? `<input type="text" class="mono-input" placeholder="${esc(TEST_TO[c.channel])}" aria-label="Send the test to">` : ''}
+      <button class="btn" type="submit">Send test</button></form>
+    <pre class="out" data-out-ch="${c.channel}" hidden></pre>`;
+  const tools = (c) => (!admin || !c.fields?.length ? '' : `<div class="actions">
+      <button class="btn small" type="button" data-act="chan-edit" data-ch="${c.channel}">${c.status === 'needs-setup' ? 'Set up' : 'Change settings'}</button>
+      ${c.status !== 'needs-setup' ? `<button class="btn small" type="button" data-act="chan-test-open" data-ch="${c.channel}">Send a test</button>` : ''}</div>
+    ${form(c)}${c.status !== 'needs-setup' ? test(c) : ''}`);
+  v.innerHTML = `${head}
+    <div class="cards">${ready.map((c) => `<section class="card channel" id="ch-${c.channel}">
       <div class="panel-head"><h2>${esc(c.label)}</h2>${pill(c.status)}</div>
       <dl>
         <dt>Sends as</dt><dd>${c.sender ? `${esc(c.sender)}${c.senderDetail ? ` <span class="hint">${esc(c.senderDetail)}</span>` : ''}` : '—'}</dd>
-        ${c.defaults?.length ? `<dt>Default destination</dt><dd>${c.defaults.map((d) => `${d.name ? esc(d.name) : '<span class="muted">unknown chat</span>'} <span class="hint mono">${esc(c.channel)}:${esc(d.id)}</span>${d.ok ? '' : `<br><span class="hint">⚠ ${esc(d.problem)}</span>`}`).join('<br>')}</dd>` : ''}
+        ${c.defaults?.length ? `<dt>Default chat</dt><dd>${c.defaults.map((d) => `${d.name ? esc(d.name) : '<span class="muted">unknown chat</span>'} <span class="hint mono">${esc(c.channel)}:${esc(d.id)}</span>${d.ok ? '' : `<br><span class="hint">⚠ ${esc(d.problem)}</span>`}`).join('<br>')}</dd>` : ''}
         <dt>Screenshots</dt><dd>${c.screenshots ? 'Attached to failure alerts' : 'Named in the message, not attached'}</dd>
         ${c.overriddenBy?.length ? `<dt>Own sender</dt><dd>${esc(c.overriddenBy.join(', '))}</dd>` : ''}
       </dl>
       ${c.note ? `<p class="hint">${esc(c.note)}</p>` : ''}
+      ${tools(c)}
     </section>`).join('')}
-    ${rest.length ? `<section class="card"><header><h2>Not set up</h2><p>These channels can't be used until they're set up on the server.</p></header>
-      <div class="tbl-wrap"><table><tbody>${rest.map((c) => `<tr><th scope="row" class="plain">${esc(c.label)}</th><td>${esc(c.note || '')}</td></tr>`).join('')}</tbody></table></div></section>` : ''}
+    ${!rest.length ? '' : admin
+    ? `<h2 class="sub">Not set up</h2>${rest.map((c) => `<section class="card channel" id="ch-${c.channel}">
+        <div class="panel-head"><h3>${esc(c.label)}</h3>${pill(c.status)}</div>
+        ${c.note ? `<p class="hint">${esc(c.note)}</p>` : ''}${tools(c)}</section>`).join('')}`
+    : `<section class="card"><header><h2>Not set up</h2><p>These channels can't be used until an admin sets them up.</p></header>
+      <div class="tbl-wrap"><table><tbody>${rest.map((c) => `<tr><th scope="row" class="plain">${esc(c.label)}</th><td>${esc(c.note || '')}</td></tr>`).join('')}</tbody></table></div></section>`}
     </div>`;
 }
 
@@ -401,7 +493,11 @@ function renderAccount() {
         <label>Type it again<input type="password" name="again" autocomplete="new-password" required></label>
         <div class="actions"><button class="btn primary" type="submit">Change password</button></div>
         <p class="msg" id="pw-msg" hidden></p>
-      </form></section>`;
+      </form></section>
+    ${me.role === 'admin' ? `<section class="card narrow"><header><h2>People</h2><p>Invite colleagues and manage who can use the console.</p></header>
+      <div class="actions"><a class="btn" href="#people">Manage people</a></div></section>` : ''}
+    <section class="card narrow"><header><h2>Sign out</h2><p>Signs you out in this browser.</p></header>
+      <div class="actions"><button class="btn" type="button" data-act="signout">Sign out</button></div></section>`;
 }
 
 // ---------- events ----------
@@ -477,6 +573,39 @@ document.addEventListener('click', async (e) => {
         toast('Cleared.'); loadApp(el.dataset.app);
       });
     }
+    if (act === 'sched-open') {
+      const ed = $('#sched-editor'); ed.hidden = false; syncSched($('form', ed));
+      ed.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); $('select', ed).focus();
+    }
+    if (act === 'sched-close') { $('#sched-editor').hidden = true; await refreshStatus(); }
+    if (act === 'retire') {
+      confirmClick(el, 'Click again to retire', async () => {
+        await api('/api/checks/retire', { method: 'POST', body: { action: el.dataset.action, retired: true } });
+        toast('Retired. It won\'t run again unless an admin brings it back.'); await refreshStatus();
+      });
+    }
+    if (act === 'unretire') {
+      el.disabled = true;
+      await api('/api/checks/retire', { method: 'POST', body: { action: el.dataset.action, retired: false } });
+      toast('Brought back, with its old schedule.'); await refreshStatus();
+    }
+    if (act === 'chan-edit' || act === 'chan-close') {
+      const f = $(`form[data-act="chan-save"][data-ch="${el.dataset.ch}"]`);
+      f.hidden = act === 'chan-close';
+      if (!f.hidden) $('input', f).focus();
+    }
+    if (act === 'chan-test-open') {
+      const f = $(`form[data-act="chan-test"][data-ch="${el.dataset.ch}"]`);
+      f.hidden = !f.hidden;
+      if (!f.hidden) ($('input', f) || $('button', f)).focus();
+    }
+    if (act === 'chan-clear') {
+      confirmClick(el, 'Click again to remove', async () => {
+        const values = Object.fromEntries([...$(`form[data-act="chan-save"][data-ch="${el.dataset.ch}"]`).querySelectorAll('input')].map((i) => [i.name, null]));
+        await api(`/api/channels/${el.dataset.ch}`, { method: 'POST', body: { values } });
+        toast('Removed. Apps using this channel now show it as not set up.'); renderChannels();
+      });
+    }
     if (act === 'invite-open' || act === 'invite-close') {
       inviteOpen = act === 'invite-open';
       $('#invite-card').hidden = !inviteOpen;
@@ -531,18 +660,49 @@ document.addEventListener('change', async (e) => {
   }
 });
 
+document.addEventListener('input', (e) => { if (e.target.form?.dataset.act === 'sched-save') syncSched(e.target.form); });
+document.addEventListener('change', (e) => { if (e.target.form?.dataset.act === 'sched-save') syncSched(e.target.form); });
+
 document.addEventListener('submit', async (e) => {
   const f = e.target;
   e.preventDefault();
   try {
+    if (f.dataset.act === 'sched-save') {
+      const schedule = schedFromForm(f);
+      if (schedule === '') return toast('Fill in the schedule first.');
+      const r = await api('/api/checks/schedule', { method: 'POST', body: { action: f.dataset.action, schedule } });
+      toast(r.schedule ? `Saved. It now runs ${r.text}.` : 'Saved. It now only runs when someone presses Run now.');
+      $('#sched-editor').hidden = true; await refreshStatus();
+    }
+    if (f.dataset.act === 'chan-save') {
+      const values = {};
+      for (const i of f.querySelectorAll('input')) {
+        const val = i.value.trim();
+        if (i.type === 'password') { if (val) values[i.name] = val; } else if (val !== i.dataset.was) values[i.name] = val || null;
+      }
+      if (!Object.keys(values).length) return toast('Nothing changed.');
+      await api(`/api/channels/${f.dataset.ch}`, { method: 'POST', body: { values } });
+      toast('Saved. Use "Send a test" to check it works.'); renderChannels();
+    }
+    if (f.dataset.act === 'chan-test') {
+      const out = $(`pre[data-out-ch="${f.dataset.ch}"]`), btn = $('button', f);
+      btn.disabled = true; out.hidden = false; out.textContent = 'Sending a test message…';
+      try {
+        const r = await api(`/api/channels/${f.dataset.ch}/test`, { method: 'POST', body: { to: $('input', f)?.value.trim() || '' } });
+        out.textContent = r.output.join('\n');
+      } finally { btn.disabled = false; }
+    }
     if (f.dataset.act === 'dest-add' || f.dataset.act === 'rdest-add') {
       const input = $('input', f);
       const value = input.value.trim();
       if (!value) return;
       const s = await api(`/api/apps/${f.dataset.app}`);
       if (f.dataset.act === 'dest-add') {
-        const r = await api(`/api/apps/${f.dataset.app}/alerts`, { method: 'POST', body: { destinations: [...s.notify, value] } });
-        toast(r.warnings?.length ? `Added, but: ${r.warnings.join(' ')}` : 'Added. Use "Send test alert" to check it arrives.');
+        // An app's first destination keeps the default chat alongside it, so nothing goes quiet by accident.
+        const base = s.notify.length ? s.notify : s.alerts.targets.map(label);
+        const r = await api(`/api/apps/${f.dataset.app}/alerts`, { method: 'POST', body: { destinations: [...base.filter((d) => d !== value), value] } });
+        toast(r.warnings?.length ? `Added, but: ${r.warnings.join(' ')}`
+          : s.notify.length ? 'Added. Use "Send test alert" to check it arrives.' : 'Added, alongside the default chat. Remove the default chat if this app shouldn\'t alert there.');
       } else {
         const r = await api(`/api/apps/${f.dataset.app}/reports`, { method: 'POST', body: { enabled: s.reports.enabled, destinations: [...s.reports.destinations, value] } });
         toast(r.warnings?.length ? `Added, but: ${r.warnings.join(' ')}` : s.reports.enabled ? 'Added. It gets every run\'s report from now on.' : 'Added. Switch run reports on to start sending.');
@@ -579,10 +739,12 @@ document.addEventListener('submit', async (e) => {
 
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#overlay').hidden) closeOverlay(); });
 $('#overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') closeOverlay(); });
-$('#signout').addEventListener('click', async () => {
+async function signOut() {
   await api('/api/logout', { method: 'POST', body: {} }).catch(() => {});
   location.href = '/login';
-});
+}
+$('#signout').addEventListener('click', signOut);
+document.addEventListener('click', (e) => { if (e.target.closest('[data-act="signout"]')) signOut(); });
 
 // ---------- routing ----------
 const VIEWS = ['checks', 'check', 'apps', 'channels', 'activity', 'people', 'account'];
@@ -600,7 +762,8 @@ function route() {
   if (v === 'people' && me?.role !== 'admin') v = 'checks';
   for (const p of document.querySelectorAll('[data-panel]')) p.hidden = p.dataset.panel !== v;
   for (const a of document.querySelectorAll('nav.views a')) {
-    if (a.dataset.view === (NAV_OF[v] || v)) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    // On phones People lives under the "You" tab, so that tab stays lit there.
+    if (a.dataset.view === (NAV_OF[v] || v) || (v === 'people' && a.classList.contains('you'))) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   }
   if (`${v}/${arg}` !== shown) { window.scrollTo(0, 0); shown = `${v}/${arg}`; }
   if (v !== 'people') { lastLink = null; inviteOpen = false; }
@@ -616,7 +779,10 @@ window.addEventListener('hashchange', route);
 
 (async () => {
   try { me = await api('/api/me'); } catch { return; }
-  $('#who').textContent = `${me.name}${me.role === 'admin' ? ' · Admin' : ''}`;
+  const initials = me.name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+  $('#who').innerHTML = `<span class="initials" aria-hidden="true">${esc(initials)}</span><span class="who-name">${esc(me.name)}${me.role === 'admin' ? ' · Admin' : ''}</span>`;
+  $('#who').setAttribute('aria-label', `Your account: ${me.name}`);
+  $('#you-initials').textContent = initials;
   $('nav.views a[data-view="people"]').hidden = me.role !== 'admin';
   route();
   await refreshStatus();

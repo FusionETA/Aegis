@@ -2,6 +2,7 @@
    as ledgers grouped by app, each opening its own page; settings one app at a time. The logo is
    the Argus eye and ΛRGUS wordmark (console/brand/build-icons.mjs); small eyes mark each run. */
 :root {
+  --glass: rgb(255 255 255 / .72); --glass-edge: rgb(255 255 255 / .7); --glass-shine: rgb(255 255 255 / .9); --glass-active: rgb(20 34 42 / .08);
   --bg: #f2f5f6;
   --surface: #ffffff;
   --sunk: #e8eef0;
@@ -25,6 +26,7 @@
     --line: #22333b; --accent: #4cb3c2; --accent-ink: #061215; --accent-soft: #15323a;
     --pass: #57c487; --pass-bg: #143022; --warn: #e2ad57; --warn-bg: #33270f;
     --fail: #f0806b; --fail-bg: #3a1a15; color-scheme: dark;
+    --glass: rgb(30 42 49 / .66); --glass-edge: rgb(255 255 255 / .08); --glass-shine: rgb(255 255 255 / .06); --glass-active: rgb(255 255 255 / .1);
   }
 }
 * { box-sizing: border-box; }
@@ -59,6 +61,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .views a { text-decoration: none; color: var(--muted); font-weight: 500; padding: 7px 12px; border-radius: 8px; }
 .views a:hover { color: var(--ink); background: var(--sunk); }
 .views a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); }
+.views a svg { display: none; }   /* icons only in the phone's bottom bar */
+.views a.you, .who .initials { display: none; }   /* the "You" tab is the phone's account button */
+.views a { position: relative; }
+.badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 999px; background: var(--fail); color: #fff; font: 700 11px/1 var(--font-body); vertical-align: 1px; }
 .who { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--muted); }
 .who a { color: var(--muted); text-decoration: none; padding: 6px 10px; border-radius: 8px; }
 .who a:hover { color: var(--ink); background: var(--sunk); }
@@ -234,6 +240,48 @@ input[type="text"], input[type="email"], input[type="password"], input[type="url
   .split, .notif { grid-template-columns: minmax(0, 1fr); }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   table.activity .who-cell { width: auto; }
-  .who { margin-left: 0; width: 100%; }
+  /* Phones: the views move to a floating bar at the bottom, clear of the home indicator. */
+  .bar { flex-wrap: nowrap; padding-block: 12px 10px; }
+  /* ...and the top bar keeps just the logo; your account is the bar's "You" tab (Sign out is on Account). */
+  .who { display: none; }
+  /* A frosted-glass capsule, like WhatsApp's tab bar: neutral highlight on the current tab. */
+  .views {
+    position: fixed; z-index: 20; left: 50%; transform: translateX(-50%);
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px)); width: min(480px, calc(100% - 20px));
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0; padding: 5px;
+    background: var(--glass); backdrop-filter: blur(22px) saturate(1.8); -webkit-backdrop-filter: blur(22px) saturate(1.8);
+    border: 1px solid var(--glass-edge); border-radius: 999px;
+    box-shadow: 0 10px 34px rgb(0 0 0 / .14), 0 1px 3px rgb(0 0 0 / .06), inset 0 1px 0 var(--glass-shine);
+  }
+  .views a { display: grid; justify-items: center; align-content: center; gap: 3px; padding: 7px 2px 6px; border-radius: 999px; color: var(--ink); font-size: 11px; font-weight: 500; line-height: 1.1; }
+  .views a:hover { background: none; }
+  .views a[aria-current="page"] { color: var(--ink); background: var(--glass-active); font-weight: 600; }
+  .views a svg { display: block; width: 25px; height: 25px; }
+  .views a.you { display: grid; }
+  .views .initials { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 10.5px; font-weight: 700; letter-spacing: .02em; }
+  /* Order on phones: Apps · Channels · (Checks) · Activity · You — Checks in the middle as a
+     larger, raised accent button. People is reached from the You page. */
+  .views a[data-view="apps"] { order: 1; } .views a[data-view="channels"] { order: 2; }
+  .views a[data-view="checks"] { order: 3; } .views a[data-view="activity"] { order: 4; } .views a.you { order: 5; }
+  .views a[data-view="people"] { display: none !important; }
+  .views a[data-view="checks"] { background: none; }
+  .views a[data-view="checks"][aria-current="page"] { background: none; color: var(--accent); font-weight: 600; }
+  .views a[data-view="checks"] svg {
+    width: 26px; height: 26px; padding: 11px; box-sizing: content-box; margin-top: -24px; border-radius: 50%;
+    background: var(--accent); color: var(--accent-ink); border: 3px solid var(--bg);
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 38%, transparent);
+  }
+  .views a[data-view="checks"]:active svg { transform: scale(.95); }
+  .views a[data-view="checks"] .badge { top: -22px; left: calc(50% + 12px); }
+  .views .badge { position: absolute; top: 2px; left: calc(50% + 6px); margin: 0; min-width: 19px; height: 19px; border: 2px solid var(--surface); box-sizing: content-box; }
+  .views a span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  body { padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
+  .toast { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* settings additions: channel set-up forms, the Retire section, the schedule editor */
+h2.sub { font-size: 16px; margin-top: 6px; }
+.chan-form { padding-top: 12px; border-top: 1px solid var(--line); }
+.side-sec.retire { border-bottom: 0; padding-bottom: 0; padding-top: 14px; border-top: 1px solid var(--line); }
+.stat small .link-btn { font-size: inherit; }

@@ -310,7 +310,10 @@ reports; an admin invites them from People if they have no account yet.
   `git -C /root/argus pull --ff-only`, after checking `git -C /root/argus status`
   is clean. If `package.json` or `package-lock.json` changed, follow it with
   `cd /root/argus && PATH=/opt/node24/bin:$PATH npm ci`.
-- **Removing or rescheduling:** back up first with
+- **Rescheduling or retiring:** prefer the console (https://argus.fusioneta.com.my): a
+  check's page has Change schedule (members for read-only checks, admins for checks that
+  change data) and Retire (admins). It edits only that check's crontab line and backs up
+  the crontab first. By hand, if the console can't do it: back up first with
   `crontab -l > /root/argus-crontab.bak-$(date +%Y%m%d-%H%M%S)`. Change only that
   check's line, show the person the diff, and install it on their yes. Never
   touch the `ARGUS_NODE=` line or the AltomateHR lines.
