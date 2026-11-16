@@ -264,7 +264,8 @@ input[type="text"], input[type="email"], input[type="password"], input[type="url
   .views a[data-view="apps"] { order: 1; } .views a[data-view="channels"] { order: 2; }
   .views a[data-view="checks"] { order: 3; } .views a[data-view="activity"] { order: 4; } .views a.you { order: 5; }
   .views a[data-view="people"] { display: none !important; }
-  .views a[data-view="checks"], .views a[data-view="checks"][aria-current="page"] { background: none; color: var(--accent); font-weight: 600; }
+  .views a[data-view="checks"] { background: none; }
+  .views a[data-view="checks"][aria-current="page"] { background: none; color: var(--accent); font-weight: 600; }
   .views a[data-view="checks"] svg {
     width: 26px; height: 26px; padding: 11px; box-sizing: content-box; margin-top: -24px; border-radius: 50%;
     background: var(--accent); color: var(--accent-ink); border: 3px solid var(--bg);
