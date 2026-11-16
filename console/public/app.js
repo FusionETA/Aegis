@@ -1,11 +1,18 @@
-// Argus console: Checks, Setup, Activity, People (admins) and Account.
+// Argus console. Views (in the address after #):
+//   checks            every check, grouped by app
+//   check/<action>    one check: status, history, how it behaves
+//   apps/<APP>        one app's settings: checks on/off, notifications, app login
+//   channels          who each alert channel sends as
+//   activity          who changed what, by day
+//   people            accounts (admins)
+//   account           your password
 // Everything comes from the console API (console/server.js); nothing is cached in the browser.
 const $ = (s, root = document) => root.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+const enc = encodeURIComponent;
 let me = null;
 let status = null;
 let statusAt = null;
-const open = new Set();
 const CRED_FIELDS = [
   ['URL', 'App address', 'https://app.example.com'],
   ['LOGIN_URL', 'Login page (if different)', 'https://app.example.com/login'],
@@ -13,6 +20,7 @@ const CRED_FIELDS = [
   ['USERNAME', 'Test account username', 'only if it signs in with a username'],
   ['PASSWORD', 'Test account password', ''],
 ];
+const FORMATS = 'Formats: bitrix:chat1234 (group chat), bitrix:57 (a person), email:name@company.com, telegram:-100…, slack, teams, googlechat, webhook.';
 
 // ---------- helpers ----------
 async function api(path, { method = 'GET', body } = {}) {
@@ -40,18 +48,26 @@ function confirmClick(btn, question, fn) {
 }
 const MYT = { timeZone: 'Asia/Kuala_Lumpur' };
 const dayKey = (d) => d.toLocaleDateString('en-CA', MYT);
-function when(d) {
-  const today = dayKey(new Date()), tomorrow = dayKey(new Date(Date.now() + 86400_000)), yesterday = dayKey(new Date(Date.now() - 86400_000));
-  const time = d.toLocaleTimeString('en-GB', { ...MYT, hour: '2-digit', minute: '2-digit' });
+function dayLabel(d) {
   const k = dayKey(d);
-  if (k === today) return `Today, ${time}`;
-  if (k === tomorrow) return `Tomorrow, ${time}`;
-  if (k === yesterday) return `Yesterday, ${time}`;
-  return `${d.toLocaleDateString('en-GB', { ...MYT, weekday: 'short', day: 'numeric', month: 'short' })}, ${time}`;
+  if (k === dayKey(new Date())) return 'Today';
+  if (k === dayKey(new Date(Date.now() - 86400_000))) return 'Yesterday';
+  if (k === dayKey(new Date(Date.now() + 86400_000))) return 'Tomorrow';
+  return d.toLocaleDateString('en-GB', { ...MYT, weekday: 'short', day: 'numeric', month: 'short' });
 }
+const clock = (d) => d.toLocaleTimeString('en-GB', { ...MYT, hour: '2-digit', minute: '2-digit' });
+const when = (d) => `${dayLabel(d)}, ${clock(d)}`;
 const runDate = (start) => new Date(start.replace(' ', 'T') + '+08:00');   // log times are MYT
+// "16/11/2026 09:01:50" (core/report.js state) -> Date
+const stateDate = (s) => { const m = String(s || '').match(/^(\d\d)\/(\d\d)\/(\d{4}) (\d\d:\d\d)/); return m ? new Date(`${m[3]}-${m[2]}-${m[1]}T${m[4]}:00+08:00`) : null; };
+const stateWhen = (s) => { const d = stateDate(s); return d ? when(d) : s; };
 const took = (s) => (s == null ? '' : s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`);
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const appName = (app) => status?.checks.find((c) => c.app === app)?.appName || app;
+const appsOf = () => [...new Set(status.checks.map((c) => c.app).filter(Boolean))];
+const label = (t) => `${t.channel}${t.to ? `:${t.to}` : ''}`;
+const appInfo = (app) => status.apps.find((x) => x.app === app) || { alerts: status.defaultAlerts, reports: { enabled: false, targets: [], problems: [] } };
+const chipsRO = (targets) => targets.map((t) => `<span class="dest ro ${t.ok ? '' : 'bad'}"${t.ok ? '' : ' title="This channel isn\'t set up on the server"'}>${esc(label(t))}</span>`).join('');
 
 // ---------- Checks ----------
 function stateOf(c) {
@@ -68,108 +84,103 @@ const eyes = (c) => {
 };
 const chev = '<svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
-function alertsLine(app) {
-  const a = status.apps.find((x) => x.app === app)?.alerts || status.defaultAlerts;
-  const list = a.targets.map((t) => `${t.channel}${t.to ? `:${t.to}` : ''}${t.ok ? '' : ' (not set up)'}`).join(', ') || 'nowhere';
-  return `${esc(list)}${a.source.startsWith('default') ? ' <span class="muted">(default chat)</span>' : ''}`;
-}
-
-function reportsLine(app) {
-  const r = status.apps.find((x) => x.app === app)?.reports;
-  if (!r?.enabled) return '<span class="muted">Off</span>';
-  return esc(r.targets.map((t) => `${t.channel}${t.to ? `:${t.to}` : ''}${t.ok ? '' : ' (not set up)'}`).join(', ') || 'nowhere');
-}
-
-// What core/report.js remembers about the check: failing since when, and the once-a-day alert limit.
-function alertState(c) {
-  const s = c.state;
-  if (!s) return 'Nothing saved yet. The first scheduled run records it.';
-  if (s.status !== 'fail') return `Passing since ${s.since}. If it starts failing, the first alert goes out straight away.`;
-  const runs = `${s.failedRuns} failed run${s.failedRuns === 1 ? '' : 's'} in a row`;
-  return `Failing since ${s.since} (${runs}). Last alert on ${s.lastAlert}. While it keeps failing it alerts at most once a day; the first pass sends "passing again".`;
-}
-
 function renderChecks() {
   const v = $('#view-checks');
   if (!status) { v.innerHTML = '<p class="muted">Loading checks…</p>'; return; }
   const checks = status.checks;
   const failing = checks.filter((c) => c.state?.status === 'fail' && !c.paused);
-  const total = checks.reduce((n, c) => n + c.totalRuns, 0);
-  const fails = checks.reduce((n, c) => n + c.failedRuns, 0);
+  const paused = checks.filter((c) => c.paused);
   const next = checks.filter((c) => c.next).sort((a, b) => a.next.localeCompare(b.next))[0];
+  const groups = [...appsOf().map((app) => [app, checks.filter((c) => c.app === app)]), [null, checks.filter((c) => !c.app)]].filter(([, list]) => list.length);
   v.innerHTML = `
-    <div class="summary">
+    <div class="page-head">
       <div class="lead">
-        <h1>${failing.length ? `${failing.length} check${failing.length > 1 ? 's' : ''} failing` : `All ${checks.length} checks passing`}</h1>
-        <p>${next ? `Next: ${esc(next.name)}, ${esc(when(new Date(next.next)))}. ` : ''}Updated ${esc(statusAt.toLocaleTimeString('en-GB', MYT))}; refreshes every minute.</p>
+        <h1>${failing.length ? `${plural(failing.length, 'check')} failing` : `All ${checks.length - paused.length} checks passing`}</h1>
+        <p>${paused.length ? `${plural(paused.length, 'check')} paused. ` : ''}${next ? `Next: ${esc(next.name)}, ${esc(when(new Date(next.next)))}.` : ''}</p>
       </div>
-      <div class="figures">
-        <div class="fig"><span>Runs in the logs</span><b>${total}</b></div>
-        <div class="fig"><span>Failed runs</span><b>${fails}</b></div>
-      </div>
+      <p class="hint">Updated ${esc(clock(statusAt))} · refreshes every minute</p>
     </div>
-    <div class="ledger" role="list">
-      <div class="ledger-head" aria-hidden="true"><span>Status</span><span>Check</span><span>Schedule</span><span>Last run</span><span>Last runs</span><span></span></div>
-      ${checks.map(rowHTML).join('')}
-    </div>`;
+    ${groups.map(([app, list]) => `<section class="group" aria-label="${esc(app ? appName(app) : 'Other checks')}">
+      <div class="group-head"><h2>${esc(app ? appName(app) : 'Other checks')}</h2><span class="hint">${plural(list.length, 'check')}</span>${app ? `<a href="#apps/${esc(app)}">Settings</a>` : ''}</div>
+      <div class="ledger" role="list">
+        <div class="ledger-head" aria-hidden="true"><span>Status</span><span>Check</span><span>Schedule</span><span>Last run</span><span>Last 5 runs</span><span></span></div>
+        ${list.map(rowHTML).join('')}
+      </div></section>`).join('')}`;
 }
 
 function rowHTML(c) {
-  const isOpen = open.has(c.action);
-  const [cls, label] = stateOf(c);
+  const [cls, text] = stateOf(c);
   const last = c.runs.find((r) => !r.skipped);
-  const id = c.action.replace('/', '-');
-  return `<div class="row ${isOpen ? 'open' : ''}" role="listitem">
-    <button class="row-main" data-act="toggle" data-action="${esc(c.action)}" aria-expanded="${isOpen}" aria-controls="d-${esc(id)}">
-      <span class="c-status"><span class="pill ${cls}">${label}</span></span>
+  return `<div class="row" role="listitem"><a class="row-main" href="#check/${enc(c.action)}">
+      <span class="c-status"><span class="pill ${cls}">${text}</span></span>
       <span class="name"><b>${esc(c.name)}${c.changesData ? '<span class="tag write">Changes data</span>' : ''}</b><small>${esc(c.site || c.action)}</small></span>
       <span class="cell c-sched">${esc(c.scheduleText)}<small>${c.paused ? 'Paused' : c.next ? `Next: ${esc(when(new Date(c.next)))}` : 'Runs when started'}</small></span>
-      <span class="cell c-last">${last ? esc(when(runDate(last.start))) : '—'}<small>${last ? esc(took(last.seconds)) : ''}</small></span>
+      <span class="cell c-last">${last ? esc(when(runDate(last.start))) : '—'}<small>${last ? `${last.exit ? 'Failed' : 'Passed'} · ${esc(took(last.seconds))}` : ''}</small></span>
       ${eyes(c)}
       ${chev}
-    </button>
-    <div class="detail" id="d-${esc(id)}" ${isOpen ? '' : 'hidden'}>${isOpen ? detailHTML(c) : ''}</div>
-  </div>`;
+    </a></div>`;
 }
 
-function detailHTML(c) {
-  const runNote = c.changesData ? 'Run now is off: this check changes data.' : c.paused ? 'Resume it to run it now.' : c.running ? 'It\'s running right now.' : '';
+// ---------- one check ----------
+function renderCheck(action) {
+  const v = $('#view-check');
+  if (!status) { v.innerHTML = '<p class="muted">Loading…</p>'; return; }
+  const c = status.checks.find((x) => x.action === action);
+  if (!c) { v.innerHTML = '<p class="msg err">That check isn\'t in Argus any more.</p><p><a href="#checks">Back to all checks</a></p>'; return; }
+  const [cls, text] = stateOf(c);
+  const last = c.runs.find((r) => !r.skipped);
+  const info = appInfo(c.app);
+  const s = c.state;
+  const days = c.daily.slice(0, 14);
+  const runs14 = days.reduce((n, d) => n + d.runs, 0), failed14 = days.reduce((n, d) => n + d.failed, 0);
   const frequent = c.totalRuns > 60;
-  return `
-    <div class="facts">
-      ${c.description ? `<p>${esc(c.description)}</p>` : ''}
-      ${c.paused ? `<p class="msg warn">Paused by ${esc(c.paused.by || 'someone')}${c.paused.at ? ` on ${esc(when(new Date(c.paused.at)))}` : ''}. It won't run until resumed.</p>` : ''}
-      <dl>
-        <dt>Command</dt><dd class="mono">run.sh ${esc(c.action)}</dd>
-        <dt>Changes data</dt><dd>${c.changesData ? 'Yes. It never retries, and can\'t be run from here.' : 'No, read-only'}</dd>
-        <dt>If it fails</dt><dd>${esc(c.retry)}</dd>
-        <dt>Alerts to</dt><dd class="mono">${alertsLine(c.app)}</dd>
-        <dt>Alert state</dt><dd>${esc(alertState(c))}</dd>
-        <dt>Run reports to</dt><dd class="mono">${reportsLine(c.app)}</dd>
-      </dl>
-      ${c.steps.length ? `<div><h3>What it checks</h3><ol class="steps">${c.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol></div>` : ''}
+  const runNote = c.changesData ? 'Run now is off because this check changes data. It only runs on its schedule.' : c.running ? 'It\'s running right now.' : '';
+  const stateLine = !s ? 'No result saved yet'
+    : s.status === 'fail' ? `Since ${esc(stateWhen(s.since))} · ${plural(s.failedRuns, 'failed run')} in a row · last alert ${esc(s.lastAlert)}`
+      : `Since ${esc(stateWhen(s.since))}`;
+  v.innerHTML = `
+    <nav class="crumbs" aria-label="Breadcrumb"><a href="#checks">Checks</a><span aria-hidden="true">/</span>${c.app ? `<a href="#apps/${esc(c.app)}">${esc(appName(c.app))}</a><span aria-hidden="true">/</span>` : ''}<span aria-current="page">${esc(c.name)}</span></nav>
+    <div class="page-head">
+      <div class="lead"><h1>${esc(c.name)}${c.changesData ? '<span class="tag write">Changes data</span>' : ''}</h1><p>${esc(c.description || c.site)}</p></div>
       <div class="actions">
-        <button class="btn" data-act="run" data-action="${esc(c.action)}" ${c.changesData || c.paused || c.running ? 'disabled' : ''}>Run now</button>
+        <button class="btn primary" data-act="run" data-action="${esc(c.action)}" ${c.changesData || c.paused || c.running ? 'disabled' : ''}>Run now</button>
         <button class="btn" data-act="pause" data-action="${esc(c.action)}" data-paused="${c.paused ? '1' : ''}">${c.paused ? 'Resume' : 'Pause'}</button>
-        <a class="btn" href="#setup">Alerts, reports and login</a>
       </div>
-      ${runNote ? `<p class="hint">${esc(runNote)}</p>` : ''}
     </div>
-    <div class="history">
-      <h3>${frequent ? 'Latest runs' : 'Run history'}</h3>
-      <div class="tbl-wrap"><table>
-        <thead><tr><th>When (MYT)</th><th>Took</th><th>Result</th><th>Notes</th><th></th></tr></thead>
-        <tbody>${c.runs.slice(0, frequent ? 8 : 15).map((r) => `<tr>
-          <td class="num">${esc(when(runDate(r.start)))}</td><td class="num">${esc(took(r.seconds))}</td>
-          <td>${r.skipped ? '<span class="pill idle">Skipped</span>' : r.exit ? '<span class="pill fail">Failed</span>' : '<span class="pill pass">Passed</span>'}</td>
-          <td>${esc(r.skipped || r.summary)}${r.retried ? ' <span class="hint">(retried)</span>' : ''}</td>
-          <td>${r.skipped ? '' : `<button class="link-btn" data-act="report" data-action="${esc(c.action)}" data-start="${esc(r.start)}">Report</button>`}</td>
-        </tr>`).join('') || '<tr><td colspan="5" class="muted">No runs in the logs yet.</td></tr>'}</tbody>
-      </table></div>
-      ${frequent ? `<h3>Per day</h3><div class="tbl-wrap"><table>
-        <thead><tr><th>Day</th><th>Runs</th><th>Failed</th></tr></thead>
-        <tbody>${c.daily.map((d) => `<tr><td class="num">${esc(new Date(d.date + 'T12:00:00+08:00').toLocaleDateString('en-GB', { ...MYT, weekday: 'short', day: 'numeric', month: 'short' }))}</td><td class="num">${d.runs}</td><td class="num">${d.failed ? `<span class="pill fail">${d.failed}</span>` : '0'}</td></tr>`).join('')}</tbody>
-      </table></div>` : ''}
+    ${c.paused ? `<p class="msg warn">Paused by ${esc(c.paused.by || 'someone')}${c.paused.at ? ` on ${esc(when(new Date(c.paused.at)))}` : ''}. It won't run until it's resumed.</p>` : ''}
+    ${runNote ? `<p class="hint">${esc(runNote)}</p>` : ''}
+    <div class="stats">
+      <div class="stat"><span>Status</span><b><span class="pill ${cls}">${text}</span></b><small>${stateLine}</small></div>
+      <div class="stat"><span>Schedule</span><b>${esc(c.scheduleText)}</b><small>${c.paused ? 'Paused' : c.next ? `Next: ${esc(when(new Date(c.next)))}` : 'Runs when started'}</small></div>
+      <div class="stat"><span>Last run</span><b>${last ? esc(when(runDate(last.start))) : '—'}</b><small>${last ? `${last.exit ? 'Failed' : 'Passed'} · took ${esc(took(last.seconds))}` : 'No runs yet'}</small></div>
+      <div class="stat"><span>Last 14 days</span><b>${plural(runs14, 'run')}</b><small>${failed14 ? `${failed14} failed` : 'None failed'}</small></div>
+    </div>
+    <div class="split">
+      <section class="card">
+        <header><h2>${frequent ? 'Latest runs' : 'Run history'}</h2><p>Open a report to see every step${c.noBrowser ? '' : ', and the screenshot when a run failed'}.</p></header>
+        <div class="tbl-wrap"><table class="runs">
+          <thead><tr><th>When (MYT)</th><th>Result</th><th>Took</th><th>Summary</th><th><span class="sr">Report</span></th></tr></thead>
+          <tbody>${c.runs.slice(0, frequent ? 10 : 20).map((r) => `<tr>
+            <td class="num">${esc(when(runDate(r.start)))}</td>
+            <td>${r.skipped ? '<span class="pill idle">Skipped</span>' : r.exit ? '<span class="pill fail">Failed</span>' : '<span class="pill pass">Passed</span>'}</td>
+            <td class="num">${esc(took(r.seconds))}</td>
+            <td class="sum"><span title="${esc(r.skipped || r.summary)}">${esc(r.skipped || r.summary)}</span>${r.retried ? '<small>Retried once</small>' : ''}</td>
+            <td>${r.skipped ? '' : `<button class="btn small" data-act="report" data-action="${esc(c.action)}" data-start="${esc(r.start)}">Report</button>`}</td>
+          </tr>`).join('') || '<tr><td colspan="5" class="muted">No runs in the logs yet.</td></tr>'}</tbody>
+        </table></div>
+        ${frequent ? `<h3>Per day</h3><div class="tbl-wrap"><table>
+          <thead><tr><th>Day</th><th>Runs</th><th>Failed</th></tr></thead>
+          <tbody>${days.map((d) => `<tr><td class="num">${esc(dayLabel(new Date(d.date + 'T12:00:00+08:00')))}</td><td class="num">${d.runs}</td><td class="num">${d.failed ? `<span class="pill fail">${d.failed}</span>` : '0'}</td></tr>`).join('')}</tbody>
+        </table></div>` : ''}
+      </section>
+      <aside class="card side" aria-label="How it works">
+        ${c.steps.length ? `<div class="side-sec"><h3>What it checks</h3><ol class="steps">${c.steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol></div>` : ''}
+        <div class="side-sec"><h3>When it fails</h3><p>${esc(c.retry)}. While it keeps failing it alerts at most once a day, and sends "passing again" when it recovers.</p></div>
+        <div class="side-sec"><h3>Failure alerts go to</h3><div class="dests">${chipsRO(info.alerts.targets) || '<span class="muted">Nowhere</span>'}${info.alerts.source.startsWith('default') ? '<span class="hint">default chat</span>' : ''}</div></div>
+        <div class="side-sec"><h3>Run reports</h3>${info.reports.enabled ? `<div class="dests">${chipsRO(info.reports.targets)}</div><p class="hint">Every run's report, passed or failed.</p>` : '<p class="muted">Off</p>'}</div>
+        ${c.app ? `<a class="btn" href="#apps/${esc(c.app)}">Change notifications or login</a>` : ''}
+        <p class="hint">Runs as <span class="mono">run.sh ${esc(c.action)}</span>${c.changesData ? '. It changes data, so it never retries.' : ''}</p>
+      </aside>
     </div>`;
 }
 
@@ -182,10 +193,10 @@ async function openReport(action, start) {
   ov.hidden = false;
   $('.icon-btn', ov).focus();
   try {
-    const { text } = await api(`/api/report?action=${encodeURIComponent(action)}&start=${encodeURIComponent(start)}`);
+    const { text } = await api(`/api/report?action=${enc(action)}&start=${enc(start)}`);
     const shots = [...text.matchAll(/logs\/screenshots\/([\w.-]+\.jpg)/g)].map((m) => m[1]);
     const body = $('.dialog-body', ov);
-    body.innerHTML = `${shots.map((s) => `<figure><img src="/api/screenshot/${encodeURIComponent(s)}" alt="Screenshot at the moment of failure"><figcaption class="hint">${esc(s)}</figcaption></figure>`).join('')}<pre class="out"></pre>`;
+    body.innerHTML = `${shots.map((s) => `<figure><img src="/api/screenshot/${enc(s)}" alt="Screenshot at the moment of failure"><figcaption class="hint">${esc(s)}</figcaption></figure>`).join('')}<pre class="out"></pre>`;
     $('pre', body).textContent = text;
   } catch (err) {
     $('.dialog-body', ov).innerHTML = `<p class="msg err">${esc(err.message)}</p>`;
@@ -201,138 +212,166 @@ async function refreshStatus() {
     if (!status) $('#view-checks').innerHTML = `<p class="msg err">${esc(err.message)}</p>`;
     return;
   }
-  if (view() === 'checks') renderChecks();
+  const { v, arg } = parseHash();
+  if (v === 'checks') renderChecks();
+  if (v === 'check') renderCheck(arg);
 }
 
-// ---------- Setup ----------
-async function renderSetup() {
-  const v = $('#view-setup');
+// ---------- Apps ----------
+async function renderApps(app) {
+  const v = $('#view-apps');
   if (!status) await refreshStatus();
-  const apps = [...new Set(status.checks.map((c) => c.app).filter(Boolean))];
-  v.innerHTML = `<div class="lead"><h1>Setup</h1><p>Changes here apply to Argus straight away and are recorded in Activity.</p></div>
-    <div class="cards"><section class="card" id="channels"><p class="muted">Loading alert channels…</p></section>
-    ${apps.map((app) => `<section class="card" id="app-${esc(app)}"><p class="muted">Loading ${esc(appName(app))}…</p></section>`).join('')}</div>`;
-  loadChannels();
-  for (const app of apps) loadAppCard(app);
+  const apps = appsOf();
+  if (!apps.includes(app)) app = apps[0];
+  v.innerHTML = `<div class="lead"><h1>Apps</h1><p>Each app's checks, where its notifications go, and the test account its checks sign in with. Changes apply straight away and are recorded in Activity.</p></div>
+    ${apps.length > 1 ? `<nav class="tabs" aria-label="Apps">${apps.map((a) => `<a href="#apps/${esc(a)}" ${a === app ? 'aria-current="page"' : ''}>${esc(appName(a))}<small>${plural(status.checks.filter((c) => c.app === a).length, 'check')}</small></a>`).join('')}</nav>` : ''}
+    <div id="app-body" class="cards" data-app="${esc(app || '')}">${app ? '<p class="muted">Loading…</p>' : '<p class="muted">No apps yet.</p>'}</div>`;
+  if (app) loadApp(app);
 }
 
-// Alert channels: who each channel sends as, and the default destination. Read-only.
-async function loadChannels() {
-  const card = $('#channels');
-  if (!card) return;
-  let data;
-  try { data = await api('/api/channels'); } catch (err) { card.innerHTML = `<p class="msg err">${esc(err.message)}</p>`; return; }
-  const pill = (s) => ({ connected: '<span class="pill pass">Connected</span>', 'set-up': '<span class="pill pass">Set up</span>', error: '<span class="pill fail">Not working</span>' }[s] || '<span class="pill idle">Needs setup</span>');
-  card.innerHTML = `
-    <header><h2>Alert channels</h2><p>Who Argus sends alerts as, per channel. Checks without their own list use the default destination. Setting up a new channel is done on the server; ask an admin.</p></header>
-    <div class="tbl-wrap"><table>
-      <thead><tr><th>Channel</th><th>Status</th><th>Sends as</th><th>Default destination</th><th>Notes</th></tr></thead>
-      <tbody>${data.channels.map((c) => `<tr>
-        <td><b>${esc(c.label)}</b></td>
-        <td>${pill(c.status)}</td>
-        <td>${c.sender ? `${esc(c.sender)}${c.senderDetail ? `<br><span class="hint">${esc(c.senderDetail)}</span>` : ''}` : '<span class="muted">—</span>'}</td>
-        <td>${c.defaults?.length ? c.defaults.map((d) => `${d.name ? esc(d.name) : '<span class="muted">unknown chat</span>'} <span class="hint mono">bitrix:${esc(d.id)}</span>${d.ok ? '' : `<br><span class="hint">⚠ ${esc(d.problem)}</span>`}`).join('<br>') : '<span class="muted">—</span>'}</td>
-        <td>${[c.note, c.status === 'connected' || c.status === 'set-up' ? (c.screenshots ? 'Screenshots attached.' : 'Screenshots named, not attached.') : null, c.overriddenBy?.length ? `Own sender for: ${c.overriddenBy.join(', ')}.` : null].filter(Boolean).map(esc).join(' ') || '—'}</td>
-      </tr>`).join('')}</tbody>
-    </table></div>`;
-}
-
-async function loadAppCard(app) {
-  const card = $(`#app-${app}`);
-  if (!card) return;
+async function loadApp(app) {
+  const box = $('#app-body');
+  if (!box || box.dataset.app !== app) return;
   let s;
-  try { s = await api(`/api/apps/${app}`); } catch (err) { card.innerHTML = `<p class="msg err">${esc(err.message)}</p>`; return; }
+  try { s = await api(`/api/apps/${app}`); } catch (err) { box.innerHTML = `<p class="msg err">${esc(err.message)}</p>`; return; }
   const checks = status.checks.filter((c) => c.app === app);
-  const def = status.defaultAlerts.targets.map((t) => `${t.channel}:${t.to}`).join(', ');
   const signsIn = checks.some((c) => !c.noBrowser);   // checks without a browser never use an app login
-  card.innerHTML = `
-    <header><h2>${esc(appName(app))}</h2><p>${checks.map((c) => esc(c.name)).join(' · ')}</p></header>
-    <div class="set-row"><span class="lbl">Checks<small>On: runs on its schedule. Turn a check off to pause it; it won't run until it's turned back on.</small></span>
-      <div class="cards">${checks.map((c) => `<label class="toggle"><input type="checkbox" data-act="pause-toggle" data-action="${esc(c.action)}" ${c.paused ? '' : 'checked'} aria-label="${esc(c.name)} is ${c.paused ? 'paused' : 'on'}"> ${esc(c.name)} · ${c.paused ? '<b class="paused">Paused</b>' : `<span class="muted">${esc(c.scheduleText)}</span>`}</label>`).join('')}</div></div>
-    <div class="set-row"><span class="lbl">Where alerts go<small>Failures alert every destination here. Empty means the default chat.</small></span>
-      <div class="cards">
-        <div class="dests">${s.notify.length ? s.notify.map((d, i) => {
-          const t = s.alerts.targets.find((x) => `${x.channel}${x.to ? `:${x.to}` : ''}` === d.replace(/^whatsapp:\+?/, 'whatsapp:').replace(/\s|-/g, ''));
-          return `<span class="dest ${t && !t.ok ? 'bad' : ''}">${esc(d)}<button type="button" data-act="dest-remove" data-app="${esc(app)}" data-i="${i}" aria-label="Remove ${esc(d)}">×</button></span>`;
-        }).join('') : `<span class="dest">${esc(def || 'default chat')}</span><span class="hint">default chat</span>`}</div>
-        ${s.alerts.problems.length ? `<p class="msg warn">${s.alerts.problems.map(esc).join('<br>')}</p>` : ''}
-        <form class="inline-form" data-act="dest-add" data-app="${esc(app)}"><input type="text" class="mono-input" placeholder="bitrix:chat1234 or email:ops@fusioneta.com" aria-label="Add an alert destination for ${esc(appName(app))}"><button class="btn" type="submit">Add</button><button class="btn" type="button" data-act="test-alert" data-app="${esc(app)}">Send test alert</button></form>
-        <p class="hint">Formats: bitrix:chat1234 (group chat), bitrix:57 (a person), email:name@company.com, telegram:-100…, slack, teams, googlechat, webhook.</p>
-        <pre class="out" data-out="${esc(app)}" hidden></pre>
-      </div></div>
-    ${reportsRow(app, s)}
-    ${signsIn ? '' : '<!-- no app login: this app\'s checks don\'t sign in -->'}
-    <div class="set-row" ${signsIn ? '' : 'hidden'}><span class="lbl">App login<small>The test account these checks sign in with. The password is stored on the server and never shown.</small></span>
-      <div class="tbl-wrap"><table class="cred-table"><tbody>${CRED_FIELDS
-        .filter(([f]) => f !== 'USERNAME' || s.credentials.USERNAME || !s.credentials.EMAIL)   // username only when an app uses one
-        .map(([f, label]) => {
-          const v = s.credentials[f];
-          const shown = f === 'PASSWORD'
-            ? (v ? '<span class="mono">••••••••</span>' : '<span class="muted">not set</span>')
-            : v ? `<span class="mono">${esc(v)}</span>` : `<span class="muted">${f === 'LOGIN_URL' ? 'not set (uses the app address)' : 'not set'}</span>`;
-          return `<tr><th scope="row">${esc(label)}</th><td>${shown}</td><td class="cred-act"><button class="btn small" type="button" data-act="cred-edit" data-app="${esc(app)}" data-field="${f}" data-has="${v ? '1' : ''}" data-value="${f === 'PASSWORD' ? '' : esc(v || '')}">${v ? (f === 'PASSWORD' ? 'Change' : 'Edit') : 'Add'}</button></td></tr>`;
-        }).join('')}</tbody></table></div></div>`;
-}
-
-// Run reports: a switch and its own destination list (core/report.js, <APP>_REPORTS).
-function reportsRow(app, s) {
-  const r = s.reports, vol = s.volume;
-  const chip = (d, i) => {
-    const t = r.targets.find((x) => `${x.channel}${x.to ? `:${x.to}` : ''}` === d.replace(/^whatsapp:\+?/, 'whatsapp:').replace(/\s|-/g, ''));
-    return `<span class="dest ${t && !t.ok ? 'bad' : ''}">${esc(d)}<button type="button" data-act="rdest-remove" data-app="${esc(app)}" data-i="${i}" aria-label="Remove ${esc(d)} from run reports">×</button></span>`;
+  const usingDefault = !s.notify.length;
+  const chip = (act, d, i, targets) => {
+    const t = targets.find((x) => label(x) === d.replace(/^whatsapp:\+?/, 'whatsapp:').replace(/\s|-/g, ''));
+    return `<span class="dest ${t && !t.ok ? 'bad' : ''}">${esc(d)}<button type="button" data-act="${act}" data-app="${esc(app)}" data-i="${i}" aria-label="Remove ${esc(d)}">×</button></span>`;
   };
+  const r = s.reports, vol = s.volume;
   const per = vol.perCheck.map((c) => `${esc(c.name)} ${c.perWeekday}${c.paused ? ' (paused, not counted)' : ''}`).join(' · ');
   const msgs = vol.perWeekday * Math.max(r.destinations.length, 1);
-  return `<div class="set-row"><span class="lbl">Run reports<small>Optional. Sends the report of every run, passed or failed, to its own list. Failure alerts above don't change.</small></span>
-      <div class="cards">
-        <label class="toggle"><input type="checkbox" data-act="reports-toggle" data-app="${esc(app)}" ${r.enabled ? 'checked' : ''} aria-label="Send ${esc(appName(app))} a report after every run"> Send a report after every run · ${r.enabled ? '<b>On</b>' : '<span class="muted">Off</span>'}</label>
-        <div class="dests">${r.destinations.map(chip).join('') || '<span class="hint">No destinations yet. Add one, then switch it on.</span>'}</div>
-        ${r.problems.length ? `<p class="msg warn">${r.problems.map(esc).join('<br>')}</p>` : ''}
-        <p class="hint">Runs on a weekday: about ${vol.perWeekday}${per ? ` (${per})` : ''}. Each destination gets one message per run; a retried run still sends one.</p>
-        ${vol.perWeekday > 50 ? `<p class="msg warn">That's about ${msgs} messages a weekday${r.destinations.length > 1 ? ` across ${r.destinations.length} destinations` : ''}. Use a chat nobody needs to watch closely.</p>` : ''}
-        <form class="inline-form" data-act="rdest-add" data-app="${esc(app)}"><input type="text" class="mono-input" placeholder="bitrix:chat1234 or email:ops@fusioneta.com" aria-label="Add a run-report destination for ${esc(appName(app))}"><button class="btn" type="submit">Add</button><button class="btn" type="button" data-act="test-report" data-app="${esc(app)}" ${r.destinations.length ? '' : 'disabled'}>Send test report</button></form>
-        <pre class="out" data-out-r="${esc(app)}" hidden></pre>
-      </div></div>`;
+  box.innerHTML = `
+    <section class="card">
+      <header><h2>Checks</h2><p>On means it runs on its schedule. Turn one off to pause it.</p></header>
+      <ul class="check-list">${checks.map((c) => `<li>
+        <label class="toggle"><input type="checkbox" data-act="pause-toggle" data-app="${esc(app)}" data-action="${esc(c.action)}" ${c.paused ? '' : 'checked'} aria-label="${esc(c.name)} is ${c.paused ? 'paused' : 'on'}">
+          <span><b>${esc(c.name)}</b><small>${c.paused ? '<span class="paused">Paused</span>' : esc(c.scheduleText)}</small></span></label>
+        <a href="#check/${enc(c.action)}">History</a></li>`).join('')}</ul>
+    </section>
+
+    <section class="card">
+      <header><h2>Notifications</h2><p>Failure alerts go out when a run fails. Run reports, if switched on, go out after every run.</p></header>
+      <div class="notif">
+        <div class="panel">
+          <div class="panel-head"><h3>Failure alerts</h3><span class="pill pass">Always on</span></div>
+          <p class="hint">Each destination gets the failure (at most once a day while it keeps failing) and the "passing again" message.</p>
+          <div class="dests">${usingDefault
+            ? `${chipsRO(s.alerts.targets)}<span class="hint">default chat</span>`
+            : s.notify.map((d, i) => chip('dest-remove', d, i, s.alerts.targets)).join('')}</div>
+          ${usingDefault ? '<p class="hint">Adding a destination replaces the default chat. Add the default chat too if it should keep getting them.</p>' : ''}
+          ${s.alerts.problems.length ? `<p class="msg warn">${s.alerts.problems.map(esc).join('<br>')}</p>` : ''}
+          <form class="inline-form" data-act="dest-add" data-app="${esc(app)}"><input type="text" class="mono-input" placeholder="bitrix:chat1234" aria-label="Add a failure-alert destination for ${esc(appName(app))}"><button class="btn" type="submit">Add</button></form>
+          <div class="actions"><button class="btn small" type="button" data-act="test-alert" data-app="${esc(app)}">Send test alert</button></div>
+          <pre class="out" data-out="${esc(app)}" hidden></pre>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Run reports</h3><label class="toggle"><input type="checkbox" data-act="reports-toggle" data-app="${esc(app)}" ${r.enabled ? 'checked' : ''} aria-label="Send ${esc(appName(app))} a report after every run"> ${r.enabled ? '<b>On</b>' : '<span class="muted">Off</span>'}</label></div>
+          <p class="hint">Every run's report, passed or failed, to its own list. About ${plural(vol.perWeekday, 'run')} a weekday${per ? ` (${per})` : ''}.</p>
+          <div class="dests">${r.destinations.map((d, i) => chip('rdest-remove', d, i, r.targets)).join('') || '<span class="hint">No destinations yet. Add one, then switch it on.</span>'}</div>
+          ${r.problems.length ? `<p class="msg warn">${r.problems.map(esc).join('<br>')}</p>` : ''}
+          ${vol.perWeekday > 50 ? `<p class="msg warn">That's about ${msgs} messages a weekday${r.destinations.length > 1 ? ` across ${r.destinations.length} destinations` : ''}. Use a chat nobody needs to watch closely.</p>` : ''}
+          <form class="inline-form" data-act="rdest-add" data-app="${esc(app)}"><input type="text" class="mono-input" placeholder="bitrix:chat1234" aria-label="Add a run-report destination for ${esc(appName(app))}"><button class="btn" type="submit">Add</button></form>
+          <div class="actions"><button class="btn small" type="button" data-act="test-report" data-app="${esc(app)}" ${r.destinations.length ? '' : 'disabled'}>Send test report</button></div>
+          <pre class="out" data-out-r="${esc(app)}" hidden></pre>
+        </div>
+      </div>
+      <p class="hint">${FORMATS} Who each channel sends as: <a href="#channels">Channels</a>.</p>
+    </section>
+
+    ${signsIn ? `<section class="card">
+      <header><h2>App login</h2><p>The test account these checks sign in with. The password is stored on the server and never shown.</p></header>
+      <div class="tbl-wrap"><table class="cred-table"><tbody>${CRED_FIELDS
+        .filter(([f]) => f !== 'USERNAME' || s.credentials.USERNAME || !s.credentials.EMAIL)   // username only when an app uses one
+        .map(([f, text]) => {
+          const val = s.credentials[f];
+          const shown = f === 'PASSWORD'
+            ? (val ? '<span class="mono">••••••••</span>' : '<span class="muted">not set</span>')
+            : val ? `<span class="mono">${esc(val)}</span>` : `<span class="muted">${f === 'LOGIN_URL' ? 'not set (uses the app address)' : 'not set'}</span>`;
+          return `<tr><th scope="row">${esc(text)}</th><td>${shown}</td><td class="cred-act"><button class="btn small" type="button" data-act="cred-edit" data-app="${esc(app)}" data-field="${f}" data-has="${val ? '1' : ''}" data-value="${f === 'PASSWORD' ? '' : esc(val || '')}">${val ? (f === 'PASSWORD' ? 'Change' : 'Edit') : 'Add'}</button></td></tr>`;
+        }).join('')}</tbody></table></div>
+    </section>` : ''}`;
+}
+
+// ---------- Channels ----------
+async function renderChannels() {
+  const v = $('#view-channels');
+  v.innerHTML = '<div class="lead"><h1>Channels</h1><p>Who Argus sends notifications as, per channel.</p></div><p class="muted">Checking each channel…</p>';
+  let data;
+  try { data = await api('/api/channels'); } catch (err) { v.innerHTML += `<p class="msg err">${esc(err.message)}</p>`; return; }
+  const pill = (s) => ({ connected: '<span class="pill pass">Connected</span>', 'set-up': '<span class="pill pass">Set up</span>', error: '<span class="pill fail">Not working</span>' }[s] || '<span class="pill idle">Needs setup</span>');
+  const ready = data.channels.filter((c) => c.status !== 'needs-setup');
+  const rest = data.channels.filter((c) => c.status === 'needs-setup');
+  v.innerHTML = `<div class="lead"><h1>Channels</h1><p>Who Argus sends notifications as, per channel. Apps without their own list use the default destination. A new channel is set up on the server; ask an admin.</p></div>
+    <div class="cards">${ready.map((c) => `<section class="card channel">
+      <div class="panel-head"><h2>${esc(c.label)}</h2>${pill(c.status)}</div>
+      <dl>
+        <dt>Sends as</dt><dd>${c.sender ? `${esc(c.sender)}${c.senderDetail ? ` <span class="hint">${esc(c.senderDetail)}</span>` : ''}` : '—'}</dd>
+        ${c.defaults?.length ? `<dt>Default destination</dt><dd>${c.defaults.map((d) => `${d.name ? esc(d.name) : '<span class="muted">unknown chat</span>'} <span class="hint mono">${esc(c.channel)}:${esc(d.id)}</span>${d.ok ? '' : `<br><span class="hint">⚠ ${esc(d.problem)}</span>`}`).join('<br>')}</dd>` : ''}
+        <dt>Screenshots</dt><dd>${c.screenshots ? 'Attached to failure alerts' : 'Named in the message, not attached'}</dd>
+        ${c.overriddenBy?.length ? `<dt>Own sender</dt><dd>${esc(c.overriddenBy.join(', '))}</dd>` : ''}
+      </dl>
+      ${c.note ? `<p class="hint">${esc(c.note)}</p>` : ''}
+    </section>`).join('')}
+    ${rest.length ? `<section class="card"><header><h2>Not set up</h2><p>These channels can't be used until they're set up on the server.</p></header>
+      <div class="tbl-wrap"><table><tbody>${rest.map((c) => `<tr><th scope="row" class="plain">${esc(c.label)}</th><td>${esc(c.note || '')}</td></tr>`).join('')}</tbody></table></div></section>` : ''}
+    </div>`;
 }
 
 // ---------- Activity ----------
 async function renderActivity() {
   const v = $('#view-activity');
-  v.innerHTML = '<div class="lead"><h1>Activity</h1><p>Who changed what in the console, newest first.</p></div><p class="muted">Loading…</p>';
+  const head = '<div class="lead"><h1>Activity</h1><p>Who changed what in the console, newest first.</p></div>';
+  v.innerHTML = `${head}<p class="muted">Loading…</p>`;
   try {
     const rows = await api('/api/audit');
-    v.innerHTML = `<div class="lead"><h1>Activity</h1><p>Who changed what in the console, newest first.</p></div>
-      <div class="tbl-wrap"><table><thead><tr><th>When (MYT)</th><th>Who</th><th>What</th><th>Details</th></tr></thead>
-      <tbody>${rows.map((r) => `<tr><td class="num">${esc(when(new Date(r.at)))}</td><td>${esc(r.actor)}</td><td>${esc(r.action)}</td><td>${esc([r.target, r.detail].filter(Boolean).join(' · '))}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Nothing yet.</td></tr>'}</tbody></table></div>`;
-  } catch (err) { v.innerHTML = `<p class="msg err">${esc(err.message)}</p>`; }
+    const days = [];
+    for (const r of rows) {
+      const k = dayKey(new Date(r.at));
+      if (days.at(-1)?.k !== k) days.push({ k, label: dayLabel(new Date(r.at)), rows: [] });
+      days.at(-1).rows.push(r);
+    }
+    v.innerHTML = `${head}${days.map((d) => `<section class="day"><h2>${esc(d.label)}</h2>
+      <div class="tbl-wrap"><table class="activity"><tbody>${d.rows.map((r) => `<tr>
+        <td class="num">${esc(clock(new Date(r.at)))}</td>
+        <td class="who-cell" title="${esc(r.actor)}">${esc(String(r.actor).replace(/\s*<[^>]*>$/, ''))}</td>
+        <td>${esc(r.action[0].toUpperCase() + r.action.slice(1))}${r.target || r.detail ? `<br><span class="hint mono">${esc([r.target, r.detail].filter(Boolean).join(' · '))}</span>` : ''}</td>
+      </tr>`).join('')}</tbody></table></div></section>`).join('') || '<p class="muted">Nothing yet.</p>'}`;
+  } catch (err) { v.innerHTML = `${head}<p class="msg err">${esc(err.message)}</p>`; }
 }
 
 // ---------- People ----------
 let lastLink = null;
+let inviteOpen = false;
 async function renderPeople() {
   const v = $('#view-people');
   if (me.role !== 'admin') { v.innerHTML = '<p class="msg err">Only admins can manage people.</p>'; return; }
   let people;
   try { people = await api('/api/people'); } catch (err) { v.innerHTML = `<p class="msg err">${esc(err.message)}</p>`; return; }
-  v.innerHTML = `<div class="lead"><h1>People</h1><p>Who can use the console. Admins can also manage people.</p></div>
-    <section class="card"><header><h2>Invite someone</h2><p>They get a one-time link (24 hours) to choose their own password. With a Bitrix user ID, Argus sends it to them as a Bitrix message.</p></header>
+  v.innerHTML = `<div class="page-head"><div class="lead"><h1>People</h1><p>Who can use the console. Members see everything and can change apps; admins also manage people.</p></div>
+      <div class="actions"><button class="btn primary" type="button" data-act="invite-open" ${inviteOpen ? 'hidden' : ''}>Invite someone</button></div></div>
+    <div id="linkbox" hidden></div>
+    <section class="card narrow" id="invite-card" ${inviteOpen ? '' : 'hidden'}><header><h2>Invite someone</h2><p>They get a one-time link (24 hours) to choose their own password. With a Bitrix user ID, Argus sends it to them as a Bitrix message.</p></header>
       <form class="form" id="invite">
         <label>Name<input type="text" name="name" required></label>
         <label>Work email<input type="email" name="email" required></label>
         <label>Bitrix user ID<small>Optional. The number in their Bitrix profile address, e.g. …/company/personal/user/57/</small><input type="text" name="bitrixId" inputmode="numeric"></label>
-        <label>Role<select name="role"><option value="member">Member: sees everything, can change Setup</option><option value="admin">Admin: also manages people</option></select></label>
-        <div class="actions"><button class="btn primary" type="submit">Send invite</button></div>
+        <label>Role<select name="role"><option value="member">Member: sees everything, can change apps</option><option value="admin">Admin: also manages people</option></select></label>
+        <div class="actions"><button class="btn primary" type="submit">Send invite</button><button class="btn" type="button" data-act="invite-close">Cancel</button></div>
         <p class="msg err" id="invite-err" hidden></p>
       </form>
-      <div id="linkbox" hidden></div>
     </section>
-    <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last sign-in</th><th></th></tr></thead>
+    <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Last sign-in</th><th><span class="sr">Actions</span></th></tr></thead>
       <tbody>${people.map((p) => `<tr>
-        <td>${esc(p.name)}${p.id === me.id ? ' <span class="hint">(you)</span>' : ''}</td><td>${esc(p.email)}</td><td>${p.role === 'admin' ? 'Admin' : 'Member'}</td>
+        <td><b>${esc(p.name)}</b>${p.id === me.id ? ' <span class="hint">(you)</span>' : ''}<br><span class="hint">${esc(p.email)}</span></td>
+        <td>${p.role === 'admin' ? 'Admin' : 'Member'}</td>
         <td>${p.active ? '<span class="pill pass">Active</span>' : '<span class="pill idle">Invited</span>'}</td>
         <td class="num">${p.lastSignIn ? esc(when(new Date(p.lastSignIn))) : '—'}</td>
-        <td><div class="actions">
-          <button class="btn small" data-act="person-reset" data-id="${p.id}">${p.active ? 'Send reset link' : 'Send new invite'}</button>
+        <td><div class="actions end">
+          <button class="btn small" data-act="person-reset" data-id="${p.id}" data-name="${esc(p.name)}">${p.active ? 'Send reset link' : 'Send new invite'}</button>
           ${p.id !== me.id ? `<button class="btn small" data-act="person-role" data-id="${p.id}" data-role="${p.role === 'admin' ? 'member' : 'admin'}">${p.role === 'admin' ? 'Make member' : 'Make admin'}</button>
           <button class="btn small danger" data-act="person-remove" data-id="${p.id}" data-name="${esc(p.name)}">Remove</button>` : ''}
         </div></td></tr>`).join('')}</tbody></table></div>`;
@@ -350,7 +389,7 @@ function showLink(link, sent, name) {
 // ---------- Account ----------
 function renderAccount() {
   $('#view-account').innerHTML = `<div class="lead"><h1>Your account</h1><p>${esc(me.name)} · ${esc(me.email)} · ${me.role === 'admin' ? 'Admin' : 'Member'}</p></div>
-    <section class="card"><header><h2>Change password</h2><p>You'll stay signed in here; other browsers are signed out.</p></header>
+    <section class="card narrow"><header><h2>Change password</h2><p>You'll stay signed in here; other browsers are signed out.</p></header>
       <form class="form" id="pwform">
         <label>Current password<input type="password" name="current" autocomplete="current-password" required></label>
         <label>New password<small>At least 10 characters.</small><input type="password" name="next" autocomplete="new-password" required></label>
@@ -361,12 +400,21 @@ function renderAccount() {
 }
 
 // ---------- events ----------
+async function sendTest(el, reports) {
+  const out = $(reports ? `pre[data-out-r="${el.dataset.app}"]` : `pre[data-out="${el.dataset.app}"]`);
+  el.disabled = true; out.hidden = false;
+  out.textContent = reports ? 'Sending a test run report to every run-report destination…' : 'Sending a test alert to every destination…';
+  const r = await api(`/api/apps/${el.dataset.app}/test-alert`, { method: 'POST', body: { reports } });
+  out.textContent = r.output.join('\n');
+  el.disabled = false;
+}
+async function afterAppChange(app) { await refreshStatus(); loadApp(app); }
+
 document.addEventListener('click', async (e) => {
   const el = e.target.closest('[data-act]');
   if (!el || el.tagName === 'FORM' || (el.tagName === 'INPUT' && el.type === 'checkbox')) return;
   const act = el.dataset.act;
   try {
-    if (act === 'toggle') { open.has(el.dataset.action) ? open.delete(el.dataset.action) : open.add(el.dataset.action); renderChecks(); }
     if (act === 'report') openReport(el.dataset.action, el.dataset.start);
     if (act === 'close') closeOverlay();
     if (act === 'run') {
@@ -388,16 +436,8 @@ document.addEventListener('click', async (e) => {
       const s = await api(`/api/apps/${el.dataset.app}`);
       const list = s.notify.filter((_, i) => i !== Number(el.dataset.i));
       const r = await api(`/api/apps/${el.dataset.app}/alerts`, { method: 'POST', body: { destinations: list } });
-      toast(list.length ? 'Removed.' : 'Removed. Alerts now go to the default chat.');
-      if (r.warnings?.length) toast(r.warnings.join(' '));
-      await refreshStatus(); loadAppCard(el.dataset.app);
-    }
-    if (act === 'test-alert') {
-      const out = $(`pre[data-out="${el.dataset.app}"]`);
-      el.disabled = true; out.hidden = false; out.textContent = 'Sending a test alert to every destination…';
-      const r = await api(`/api/apps/${el.dataset.app}/test-alert`, { method: 'POST', body: {} });
-      out.textContent = r.output.join('\n');
-      el.disabled = false;
+      toast(r.warnings?.length ? r.warnings.join(' ') : list.length ? 'Removed.' : 'Removed. Alerts now go to the default chat.');
+      await afterAppChange(el.dataset.app);
     }
     if (act === 'rdest-remove') {
       const s = await api(`/api/apps/${el.dataset.app}`);
@@ -405,22 +445,17 @@ document.addEventListener('click', async (e) => {
       const enabled = s.reports.enabled && list.length > 0;
       await api(`/api/apps/${el.dataset.app}/reports`, { method: 'POST', body: { enabled, destinations: list } });
       toast(s.reports.enabled && !enabled ? 'Removed. Run reports are off: no destinations left.' : 'Removed.');
-      await refreshStatus(); loadAppCard(el.dataset.app);
+      await afterAppChange(el.dataset.app);
     }
-    if (act === 'test-report') {
-      const out = $(`pre[data-out-r="${el.dataset.app}"]`);
-      el.disabled = true; out.hidden = false; out.textContent = 'Sending a test run report to every run-report destination…';
-      const r = await api(`/api/apps/${el.dataset.app}/test-alert`, { method: 'POST', body: { reports: true } });
-      out.textContent = r.output.join('\n');
-      el.disabled = false;
-    }
+    if (act === 'test-alert') await sendTest(el, false);
+    if (act === 'test-report') await sendTest(el, true);
     if (act === 'cred-edit') {
       // Turn this row into a small form; the password box always starts empty.
       const row = el.closest('tr'), f = el.dataset.field, app = el.dataset.app;
-      const [, label, ph] = CRED_FIELDS.find(([k]) => k === f);
+      const [, text, ph] = CRED_FIELDS.find(([k]) => k === f);
       const type = f === 'PASSWORD' ? 'password' : f.endsWith('URL') ? 'url' : f === 'EMAIL' ? 'email' : 'text';
       row.cells[1].innerHTML = `<form class="inline-form" data-act="cred-save" data-app="${esc(app)}" data-field="${f}">
-        <input type="${type}" autocomplete="${f === 'PASSWORD' ? 'new-password' : 'off'}" placeholder="${esc(ph)}" aria-label="${esc(label)}">
+        <input type="${type}" autocomplete="${f === 'PASSWORD' ? 'new-password' : 'off'}" placeholder="${esc(ph)}" aria-label="${esc(text)}">
         <button class="btn small primary" type="submit">Save</button>
         <button class="btn small" type="button" data-act="cred-cancel" data-app="${esc(app)}">Cancel</button>
         ${el.dataset.has ? `<button class="btn small danger" type="button" data-act="cred-clear" data-app="${esc(app)}" data-field="${f}">Remove</button>` : ''}
@@ -430,17 +465,22 @@ document.addEventListener('click', async (e) => {
       input.value = el.dataset.value || '';
       input.focus();
     }
-    if (act === 'cred-cancel') loadAppCard(el.dataset.app);
+    if (act === 'cred-cancel') loadApp(el.dataset.app);
     if (act === 'cred-clear') {
       confirmClick(el, 'Click again to remove', async () => {
         await api(`/api/apps/${el.dataset.app}/login`, { method: 'POST', body: { field: el.dataset.field, value: null } });
-        toast('Cleared.'); loadAppCard(el.dataset.app);
+        toast('Cleared.'); loadApp(el.dataset.app);
       });
+    }
+    if (act === 'invite-open' || act === 'invite-close') {
+      inviteOpen = act === 'invite-open';
+      $('#invite-card').hidden = !inviteOpen;
+      $('[data-act="invite-open"]').hidden = inviteOpen;
+      if (inviteOpen) $('#invite [name="name"]').focus();
     }
     if (act === 'person-reset') {
       const r = await api(`/api/people/${el.dataset.id}/reset`, { method: 'POST', body: {} });
-      const row = el.closest('tr');
-      lastLink = { link: r.link, sent: r.sentByBitrix, name: row ? row.cells[0].textContent.replace(' (you)', '') : 'them' };
+      lastLink = { link: r.link, sent: r.sentByBitrix, name: el.dataset.name };
       await renderPeople(); toast(r.sentByBitrix ? 'Link sent by Bitrix.' : 'Link created. Copy it from the box above.');
     }
     if (act === 'person-role') {
@@ -473,51 +513,48 @@ document.addEventListener('change', async (e) => {
       const s = await api(`/api/apps/${el.dataset.app}`);
       const r = await api(`/api/apps/${el.dataset.app}/reports`, { method: 'POST', body: { enabled: el.checked, destinations: s.reports.destinations } });
       toast(el.checked ? `On. Every run's report now goes to the list below.${r.warnings?.length ? ` But: ${r.warnings.join(' ')}` : ''}` : 'Off. Only failures alert now.');
-      await refreshStatus(); loadAppCard(el.dataset.app);
+      await afterAppChange(el.dataset.app);
     } catch (err) { toast(err.message); el.checked = !el.checked; }
-    return;
   }
-  if (el.dataset.act !== 'pause-toggle') return;
-  try {
-    // The switch shows "on" (running on schedule); turning it off pauses the check.
-    await api('/api/checks/pause', { method: 'POST', body: { action: el.dataset.action, paused: !el.checked } });
-    toast(el.checked ? 'Turned on. It runs on its schedule again.' : 'Paused. It won\'t run until it\'s turned back on.');
-    await refreshStatus(); renderSetup();
-  } catch (err) { toast(err.message); el.checked = !el.checked; }
+  if (el.dataset.act === 'pause-toggle') {
+    try {
+      // The switch shows "on" (running on schedule); turning it off pauses the check.
+      await api('/api/checks/pause', { method: 'POST', body: { action: el.dataset.action, paused: !el.checked } });
+      toast(el.checked ? 'Turned on. It runs on its schedule again.' : 'Paused. It won\'t run until it\'s turned back on.');
+      await afterAppChange(el.dataset.app);
+    } catch (err) { toast(err.message); el.checked = !el.checked; }
+  }
 });
 
 document.addEventListener('submit', async (e) => {
   const f = e.target;
   e.preventDefault();
   try {
-    if (f.dataset.act === 'dest-add') {
+    if (f.dataset.act === 'dest-add' || f.dataset.act === 'rdest-add') {
       const input = $('input', f);
       const value = input.value.trim();
       if (!value) return;
       const s = await api(`/api/apps/${f.dataset.app}`);
-      const r = await api(`/api/apps/${f.dataset.app}/alerts`, { method: 'POST', body: { destinations: [...s.notify, value] } });
-      toast(r.warnings?.length ? `Added, but: ${r.warnings.join(' ')}` : 'Added. Use "Send test alert" to check it arrives.');
-      await refreshStatus(); loadAppCard(f.dataset.app);
-    }
-    if (f.dataset.act === 'rdest-add') {
-      const input = $('input', f);
-      const value = input.value.trim();
-      if (!value) return;
-      const s = await api(`/api/apps/${f.dataset.app}`);
-      const r = await api(`/api/apps/${f.dataset.app}/reports`, { method: 'POST', body: { enabled: s.reports.enabled, destinations: [...s.reports.destinations, value] } });
-      toast(r.warnings?.length ? `Added, but: ${r.warnings.join(' ')}` : s.reports.enabled ? 'Added. It gets every run\'s report from now on.' : 'Added. Switch run reports on to start sending.');
-      await refreshStatus(); loadAppCard(f.dataset.app);
+      if (f.dataset.act === 'dest-add') {
+        const r = await api(`/api/apps/${f.dataset.app}/alerts`, { method: 'POST', body: { destinations: [...s.notify, value] } });
+        toast(r.warnings?.length ? `Added, but: ${r.warnings.join(' ')}` : 'Added. Use "Send test alert" to check it arrives.');
+      } else {
+        const r = await api(`/api/apps/${f.dataset.app}/reports`, { method: 'POST', body: { enabled: s.reports.enabled, destinations: [...s.reports.destinations, value] } });
+        toast(r.warnings?.length ? `Added, but: ${r.warnings.join(' ')}` : s.reports.enabled ? 'Added. It gets every run\'s report from now on.' : 'Added. Switch run reports on to start sending.');
+      }
+      await afterAppChange(f.dataset.app);
     }
     if (f.dataset.act === 'cred-save') {
       const input = $('input', f);
       if (!input.value) return toast('Type a value first.');
       await api(`/api/apps/${f.dataset.app}/login`, { method: 'POST', body: { field: f.dataset.field, value: input.value } });
-      toast('Saved on the server.'); loadAppCard(f.dataset.app);
+      toast('Saved on the server.'); loadApp(f.dataset.app);
     }
     if (f.id === 'invite') {
       const data = Object.fromEntries(new FormData(f));
       const r = await api('/api/people', { method: 'POST', body: data });
       lastLink = { link: r.link, sent: r.sentByBitrix, name: r.person.name };
+      inviteOpen = false;
       await renderPeople();
       toast(r.sentByBitrix ? `Invite sent to ${r.person.name} by Bitrix.` : 'Invite created. Copy the link from the box above.');
     }
@@ -543,18 +580,29 @@ $('#signout').addEventListener('click', async () => {
 });
 
 // ---------- routing ----------
-const VIEWS = ['checks', 'setup', 'activity', 'people', 'account'];
-const view = () => (VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'checks');
+const VIEWS = ['checks', 'check', 'apps', 'channels', 'activity', 'people', 'account'];
+const NAV_OF = { check: 'checks' };
+function parseHash() {
+  const [head, ...rest] = location.hash.slice(1).split('/');
+  const v = head === 'setup' ? 'apps' : head;   // old links
+  let arg = null;
+  try { arg = rest.length ? decodeURIComponent(rest.join('/')) : null; } catch {}
+  return VIEWS.includes(v) ? { v, arg } : { v: 'checks', arg: null };
+}
+let shown = '';
 function route() {
-  let v = view();
+  let { v, arg } = parseHash();
   if (v === 'people' && me?.role !== 'admin') v = 'checks';
   for (const p of document.querySelectorAll('[data-panel]')) p.hidden = p.dataset.panel !== v;
-  for (const a of document.querySelectorAll('nav a')) {
-    if (a.dataset.view === v) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  for (const a of document.querySelectorAll('nav.views a')) {
+    if (a.dataset.view === (NAV_OF[v] || v)) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   }
-  if (v !== 'people') lastLink = null;
+  if (`${v}/${arg}` !== shown) { window.scrollTo(0, 0); shown = `${v}/${arg}`; }
+  if (v !== 'people') { lastLink = null; inviteOpen = false; }
   if (v === 'checks') renderChecks();
-  if (v === 'setup') renderSetup();
+  if (v === 'check') renderCheck(arg);
+  if (v === 'apps') renderApps(arg);
+  if (v === 'channels') renderChannels();
   if (v === 'activity') renderActivity();
   if (v === 'people') renderPeople();
   if (v === 'account') renderAccount();
@@ -564,8 +612,11 @@ window.addEventListener('hashchange', route);
 (async () => {
   try { me = await api('/api/me'); } catch { return; }
   $('#who').textContent = `${me.name}${me.role === 'admin' ? ' · Admin' : ''}`;
-  $('nav a[data-view="people"]').hidden = me.role !== 'admin';
+  $('nav.views a[data-view="people"]').hidden = me.role !== 'admin';
   route();
   await refreshStatus();
-  setInterval(() => { if (view() === 'checks' && document.visibilityState === 'visible') refreshStatus(); }, 60_000);
+  setInterval(() => {
+    const { v } = parseHash();
+    if ((v === 'checks' || v === 'check') && document.visibilityState === 'visible') refreshStatus();
+  }, 60_000);
 })();
