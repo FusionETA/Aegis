@@ -7,8 +7,10 @@ with `tools/notify.js --app <app> --check | --test`. The console
 its Channels page shows which channels are set up and who they send as.
 
 - **Destinations** (the `<APP>_NOTIFY` values) are not secret. Claude may add or edit that line.
-- **Credentials** (tokens, passwords, webhook URLs) are secrets. The person adds them to
-  `.env` themselves, over SSH or the DigitalOcean console. Never collect them in chat.
+- **Credentials** (tokens, passwords, webhook URLs) are secrets. A console admin adds the
+  shared ones on the Channels page (saved write-only), or the person adds them to `.env`
+  over SSH. Per-app overrides (`<APP>_`-prefixed) are still added on the server. Never
+  collect them in chat.
 - **Sharing:** credentials without a prefix (`SMTP_HOST`, `SLACK_WEBHOOK_URL`, ...) are shared by all
   checks. `<APP>_`-prefixed copies override them for one check.
 - **Default:** with no `<APP>_NOTIFY`, alerts go to the default Bitrix chat (`BITRIX_DIALOG_ID`).
