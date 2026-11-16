@@ -290,7 +290,9 @@ async function channels() {
     const defaults = [];
     for (const id of (env.BITRIX_DIALOG_ID || '').split(',').map((s) => s.trim()).filter(Boolean)) {
       const d = await getJson(`${hook}/im.dialog.get.json?DIALOG_ID=${encodeURIComponent(id)}`);
-      defaults.push({ id, name: d.result?.name || null, ok: !!d.result, problem: d.result ? null : 'the sender isn\'t a member of this chat' });
+      // Only blame chat membership when the webhook itself works.
+      const problem = d.result ? null : profile.result ? 'the sender isn\'t a member of this chat' : null;
+      defaults.push({ id, name: d.result?.name || null, ok: !!d.result || !profile.result, problem });
     }
     const p = profile.result;
     list.push({

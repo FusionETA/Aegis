@@ -47,7 +47,8 @@ function passwordMatches(pw, stored) {
 export function passwordProblem(pw, user) {
   if (typeof pw !== 'string' || pw.length < 10) return 'Use at least 10 characters.';
   if (pw.length > 200) return 'Use at most 200 characters.';
-  if (user && pw.toLowerCase().includes(user.email.split('@')[0].toLowerCase())) return 'Don\'t use your email name in your password.';
+  const name = user ? user.email.split('@')[0].toLowerCase() : '';
+  if (name.length >= 4 && pw.toLowerCase().includes(name)) return 'Don\'t use your email name in your password.';
   return null;
 }
 
