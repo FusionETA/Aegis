@@ -33,6 +33,11 @@
 // REPEAT LIMIT: while a check keeps failing it alerts at most once per day (MYT);
 // later failures that day only log. "Passing again" is always sent.
 //
+// RUN REPORTS: optional, per app, separate from alerts. With MY_APP_REPORTS_ENABLED=1,
+// every finished run (passed or failed, after any retry) also sends its report to
+// MY_APP_REPORTS (same destination format). Not limited per day; a destination that
+// just got this run's failure alert isn't sent it twice. Set in the console's Setup.
+//
 // ARGUS_NO_NOTIFY=1 suppresses every send (use it for test runs); such runs also
 // leave the stored state alone.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -204,6 +209,23 @@ export function resolveTargets(app) {
     ? own
     : (process.env.BITRIX_DIALOG_ID || '').split(',').filter((s) => s.trim()).map((d) => `bitrix:${d.trim()}`).join(',');
   const source = own.trim() ? `${app}_NOTIFY` : 'default (BITRIX_DIALOG_ID)';
+  const { targets, problems } = parseList(app, list);
+  if (!targets.length && !problems.length) problems.push(`no destinations: set ${app ? `${app}_NOTIFY` : 'BITRIX_DIALOG_ID'}`);
+  return { source, targets, problems };
+}
+
+// RUN REPORTS (optional, per app): with <APP>_REPORTS_ENABLED=1, the report of every
+// run, passed or failed, also goes to the destinations in <APP>_REPORTS. Separate
+// from failure alerts; there is no default list.
+export function resolveReportTargets(app) {
+  const enabled = !!app && /^(1|true|yes|on)$/i.test(process.env[`${app}_REPORTS_ENABLED`] || '');
+  const { targets, problems } = parseList(app, app ? process.env[`${app}_REPORTS`] || '' : '');
+  if (enabled && !targets.length && !problems.length) problems.push(`no run-report destinations: set ${app}_REPORTS`);
+  return { enabled, source: `${app}_REPORTS`, targets, problems };
+}
+
+// Parses "channel:to, channel:to" and checks each channel has its credentials.
+export function parseList(app, list) {
   const targets = [];
   const problems = [];
   for (const raw of list.split(',').map((s) => s.trim()).filter(Boolean)) {
@@ -224,8 +246,7 @@ export function resolveTargets(app) {
     if (missing.length) problems.push(`${raw}: missing ${missing.join(', ')}${app ? ` (or ${app}_-prefixed)` : ''} in .env`);
     targets.push({ channel, to, ok: !missing.length });
   }
-  if (!targets.length && !problems.length) problems.push(`no destinations: set ${app ? `${app}_NOTIFY` : 'BITRIX_DIALOG_ID'}`);
-  return { source, targets, problems };
+  return { targets, problems };
 }
 
 const suppressed = () => /^(1|true|yes)$/i.test(process.env.ARGUS_NO_NOTIFY || '');
@@ -266,11 +287,13 @@ export async function sendReportOnFailure(result, text, { app, quietPass = false
     console.log('\n----- REPORT -----\n' + text + '\n------------------');
     const today = now.slice(0, 10); // dd/mm/yyyy
     const alertedToday = stillFailing && prev.lastAlert === today;
+    let alerted = new Set();
     if (alertedToday) {
       console.log(`[report] still failing — already alerted today, so no repeat alert (next one tomorrow if it's still broken)`);
     } else {
-      await sendReport(text, { app, screenshot: result.screenshot });
+      alerted = await sendReport(text, { app, screenshot: result.screenshot });
     }
+    await sendRunReport(app, false, text, result.screenshot, alerted);
     if (!suppressed()) {
       writeState({ status: 'fail', since: stillFailing ? prev.since : now, failedRuns, lastAlert: today, lastRun: now });
     }
@@ -279,7 +302,7 @@ export async function sendReportOnFailure(result, text, { app, quietPass = false
 
   if (!quietPass) {
     console.log('\n----- REPORT -----\n' + text + '\n------------------');
-    console.log('[report] all checks passed — logged only, no notification sent');
+    console.log('[report] all checks passed — no alert sent');
   }
   if (prev?.status === 'fail') {
     const title = text.split('\n')[0].replace(/^\W*Argus\s*—\s*/u, '').replace(/\s*Report$/, '');
@@ -295,26 +318,44 @@ export async function sendReportOnFailure(result, text, { app, quietPass = false
       { app, subject: `[Argus] Passing again — ${title}` },
     );
   }
+  await sendRunReport(app, true, text);
   if (!suppressed()) writeState({ status: 'pass', since: prev?.status === 'pass' ? prev.since : now, lastRun: now });
 }
 
-// Sends `text` to every destination of `app`; one failing channel doesn't stop the rest.
-export async function sendReport(text, { app, subject, screenshot } = {}) {
+// Sends `text` to every destination of `app` (or the given `resolved` list); one failing
+// channel doesn't stop the rest. Returns the labels it delivered to; `skip` leaves some out.
+export async function sendReport(text, { app, subject, screenshot, resolved, skip = new Set(), what = 'sent' } = {}) {
+  const delivered = new Set();
   if (suppressed()) {
     console.log('[report] ARGUS_NO_NOTIFY set — notifications suppressed');
-    return;
+    return delivered;
   }
-  const { targets, problems } = resolveTargets(app);
+  const { targets, problems } = resolved || resolveTargets(app);
   for (const p of problems) console.error(`[report] ${p}`);
   const subj = subject || `[Argus] FAILED — ${text.split('\n')[0].replace(/^\W+/u, '')}`;
   for (const { channel, to, ok } of targets) {
-    if (!ok) continue;
     const label = to ? `${channel}:${to}` : channel;
+    if (!ok || skip.has(label)) continue;
     try {
       const info = await CHANNELS[channel].send(to, text, { app, subject: subj, screenshot });
-      console.log(`[report] sent to ${label}${info ? ` (${info})` : ''}`);
+      delivered.add(label);
+      console.log(`[report] ${what} to ${label}${info ? ` (${info})` : ''}`);
     } catch (err) {
       console.error(`[report] failed for ${label}: ${err.message}`);
     }
   }
+  return delivered;
+}
+
+// The report of a finished run, to the app's run-report destinations when switched on.
+// Destinations that just got the failure alert for this run are skipped.
+async function sendRunReport(app, passed, text, screenshot, skip = new Set()) {
+  if (suppressed()) return;
+  const resolved = resolveReportTargets(app);
+  if (!resolved.enabled) return;
+  const title = text.split('\n')[0].replace(/^\W*Argus\s*—\s*/u, '').replace(/\s*Report$/, '');
+  await sendReport(`${passed ? '✅ Passed' : '❌ Failed'} — ${title}\n\n${text}`, {
+    app, resolved, skip, what: 'run report sent',
+    subject: `[Argus] ${passed ? 'Passed' : 'Failed'} — ${title}`, screenshot: passed ? undefined : screenshot,
+  });
 }

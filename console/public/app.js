@@ -74,6 +74,21 @@ function alertsLine(app) {
   return `${esc(list)}${a.source.startsWith('default') ? ' <span class="muted">(default chat)</span>' : ''}`;
 }
 
+function reportsLine(app) {
+  const r = status.apps.find((x) => x.app === app)?.reports;
+  if (!r?.enabled) return '<span class="muted">Off</span>';
+  return esc(r.targets.map((t) => `${t.channel}${t.to ? `:${t.to}` : ''}${t.ok ? '' : ' (not set up)'}`).join(', ') || 'nowhere');
+}
+
+// What core/report.js remembers about the check: failing since when, and the once-a-day alert limit.
+function alertState(c) {
+  const s = c.state;
+  if (!s) return 'Nothing saved yet. The first scheduled run records it.';
+  if (s.status !== 'fail') return `Passing since ${s.since}. If it starts failing, the first alert goes out straight away.`;
+  const runs = `${s.failedRuns} failed run${s.failedRuns === 1 ? '' : 's'} in a row`;
+  return `Failing since ${s.since} (${runs}). Last alert on ${s.lastAlert}. While it keeps failing it alerts at most once a day; the first pass sends "passing again".`;
+}
+
 function renderChecks() {
   const v = $('#view-checks');
   if (!status) { v.innerHTML = '<p class="muted">Loading checks…</p>'; return; }
@@ -129,12 +144,14 @@ function detailHTML(c) {
         <dt>Changes data</dt><dd>${c.changesData ? 'Yes. It never retries, and can\'t be run from here.' : 'No, read-only'}</dd>
         <dt>If it fails</dt><dd>${esc(c.retry)}</dd>
         <dt>Alerts to</dt><dd class="mono">${alertsLine(c.app)}</dd>
+        <dt>Alert state</dt><dd>${esc(alertState(c))}</dd>
+        <dt>Run reports to</dt><dd class="mono">${reportsLine(c.app)}</dd>
       </dl>
       ${c.steps.length ? `<div><h3>What it checks</h3><ol class="steps">${c.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol></div>` : ''}
       <div class="actions">
         <button class="btn" data-act="run" data-action="${esc(c.action)}" ${c.changesData || c.paused || c.running ? 'disabled' : ''}>Run now</button>
         <button class="btn" data-act="pause" data-action="${esc(c.action)}" data-paused="${c.paused ? '1' : ''}">${c.paused ? 'Resume' : 'Pause'}</button>
-        <a class="btn" href="#setup">Alerts and login</a>
+        <a class="btn" href="#setup">Alerts, reports and login</a>
       </div>
       ${runNote ? `<p class="hint">${esc(runNote)}</p>` : ''}
     </div>
@@ -243,6 +260,7 @@ async function loadAppCard(app) {
         <p class="hint">Formats: bitrix:chat1234 (group chat), bitrix:57 (a person), email:name@company.com, telegram:-100…, slack, teams, googlechat, webhook.</p>
         <pre class="out" data-out="${esc(app)}" hidden></pre>
       </div></div>
+    ${reportsRow(app, s)}
     ${signsIn ? '' : '<!-- no app login: this app\'s checks don\'t sign in -->'}
     <div class="set-row" ${signsIn ? '' : 'hidden'}><span class="lbl">App login<small>The test account these checks sign in with. The password is stored on the server and never shown.</small></span>
       <div class="tbl-wrap"><table class="cred-table"><tbody>${CRED_FIELDS
@@ -254,6 +272,27 @@ async function loadAppCard(app) {
             : v ? `<span class="mono">${esc(v)}</span>` : `<span class="muted">${f === 'LOGIN_URL' ? 'not set (uses the app address)' : 'not set'}</span>`;
           return `<tr><th scope="row">${esc(label)}</th><td>${shown}</td><td class="cred-act"><button class="btn small" type="button" data-act="cred-edit" data-app="${esc(app)}" data-field="${f}" data-has="${v ? '1' : ''}" data-value="${f === 'PASSWORD' ? '' : esc(v || '')}">${v ? (f === 'PASSWORD' ? 'Change' : 'Edit') : 'Add'}</button></td></tr>`;
         }).join('')}</tbody></table></div></div>`;
+}
+
+// Run reports: a switch and its own destination list (core/report.js, <APP>_REPORTS).
+function reportsRow(app, s) {
+  const r = s.reports, vol = s.volume;
+  const chip = (d, i) => {
+    const t = r.targets.find((x) => `${x.channel}${x.to ? `:${x.to}` : ''}` === d.replace(/^whatsapp:\+?/, 'whatsapp:').replace(/\s|-/g, ''));
+    return `<span class="dest ${t && !t.ok ? 'bad' : ''}">${esc(d)}<button type="button" data-act="rdest-remove" data-app="${esc(app)}" data-i="${i}" aria-label="Remove ${esc(d)} from run reports">×</button></span>`;
+  };
+  const per = vol.perCheck.map((c) => `${esc(c.name)} ${c.perWeekday}${c.paused ? ' (paused, not counted)' : ''}`).join(' · ');
+  const msgs = vol.perWeekday * Math.max(r.destinations.length, 1);
+  return `<div class="set-row"><span class="lbl">Run reports<small>Optional. Sends the report of every run, passed or failed, to its own list. Failure alerts above don't change.</small></span>
+      <div class="cards">
+        <label class="toggle"><input type="checkbox" data-act="reports-toggle" data-app="${esc(app)}" ${r.enabled ? 'checked' : ''} aria-label="Send ${esc(appName(app))} a report after every run"> Send a report after every run · ${r.enabled ? '<b>On</b>' : '<span class="muted">Off</span>'}</label>
+        <div class="dests">${r.destinations.map(chip).join('') || '<span class="hint">No destinations yet. Add one, then switch it on.</span>'}</div>
+        ${r.problems.length ? `<p class="msg warn">${r.problems.map(esc).join('<br>')}</p>` : ''}
+        <p class="hint">Runs on a weekday: about ${vol.perWeekday}${per ? ` (${per})` : ''}. Each destination gets one message per run; a retried run still sends one.</p>
+        ${vol.perWeekday > 50 ? `<p class="msg warn">That's about ${msgs} messages a weekday${r.destinations.length > 1 ? ` across ${r.destinations.length} destinations` : ''}. Use a chat nobody needs to watch closely.</p>` : ''}
+        <form class="inline-form" data-act="rdest-add" data-app="${esc(app)}"><input type="text" class="mono-input" placeholder="bitrix:chat1234 or email:ops@fusioneta.com" aria-label="Add a run-report destination for ${esc(appName(app))}"><button class="btn" type="submit">Add</button><button class="btn" type="button" data-act="test-report" data-app="${esc(app)}" ${r.destinations.length ? '' : 'disabled'}>Send test report</button></form>
+        <pre class="out" data-out-r="${esc(app)}" hidden></pre>
+      </div></div>`;
 }
 
 // ---------- Activity ----------
@@ -360,6 +399,21 @@ document.addEventListener('click', async (e) => {
       out.textContent = r.output.join('\n');
       el.disabled = false;
     }
+    if (act === 'rdest-remove') {
+      const s = await api(`/api/apps/${el.dataset.app}`);
+      const list = s.reports.destinations.filter((_, i) => i !== Number(el.dataset.i));
+      const enabled = s.reports.enabled && list.length > 0;
+      await api(`/api/apps/${el.dataset.app}/reports`, { method: 'POST', body: { enabled, destinations: list } });
+      toast(s.reports.enabled && !enabled ? 'Removed. Run reports are off: no destinations left.' : 'Removed.');
+      await refreshStatus(); loadAppCard(el.dataset.app);
+    }
+    if (act === 'test-report') {
+      const out = $(`pre[data-out-r="${el.dataset.app}"]`);
+      el.disabled = true; out.hidden = false; out.textContent = 'Sending a test run report to every run-report destination…';
+      const r = await api(`/api/apps/${el.dataset.app}/test-alert`, { method: 'POST', body: { reports: true } });
+      out.textContent = r.output.join('\n');
+      el.disabled = false;
+    }
     if (act === 'cred-edit') {
       // Turn this row into a small form; the password box always starts empty.
       const row = el.closest('tr'), f = el.dataset.field, app = el.dataset.app;
@@ -414,6 +468,15 @@ document.addEventListener('click', async (e) => {
 
 document.addEventListener('change', async (e) => {
   const el = e.target;
+  if (el.dataset.act === 'reports-toggle') {
+    try {
+      const s = await api(`/api/apps/${el.dataset.app}`);
+      const r = await api(`/api/apps/${el.dataset.app}/reports`, { method: 'POST', body: { enabled: el.checked, destinations: s.reports.destinations } });
+      toast(el.checked ? `On. Every run's report now goes to the list below.${r.warnings?.length ? ` But: ${r.warnings.join(' ')}` : ''}` : 'Off. Only failures alert now.');
+      await refreshStatus(); loadAppCard(el.dataset.app);
+    } catch (err) { toast(err.message); el.checked = !el.checked; }
+    return;
+  }
   if (el.dataset.act !== 'pause-toggle') return;
   try {
     // The switch shows "on" (running on schedule); turning it off pauses the check.
@@ -434,6 +497,15 @@ document.addEventListener('submit', async (e) => {
       const s = await api(`/api/apps/${f.dataset.app}`);
       const r = await api(`/api/apps/${f.dataset.app}/alerts`, { method: 'POST', body: { destinations: [...s.notify, value] } });
       toast(r.warnings?.length ? `Added, but: ${r.warnings.join(' ')}` : 'Added. Use "Send test alert" to check it arrives.');
+      await refreshStatus(); loadAppCard(f.dataset.app);
+    }
+    if (f.dataset.act === 'rdest-add') {
+      const input = $('input', f);
+      const value = input.value.trim();
+      if (!value) return;
+      const s = await api(`/api/apps/${f.dataset.app}`);
+      const r = await api(`/api/apps/${f.dataset.app}/reports`, { method: 'POST', body: { enabled: s.reports.enabled, destinations: [...s.reports.destinations, value] } });
+      toast(r.warnings?.length ? `Added, but: ${r.warnings.join(' ')}` : s.reports.enabled ? 'Added. It gets every run\'s report from now on.' : 'Added. Switch run reports on to start sending.');
       await refreshStatus(); loadAppCard(f.dataset.app);
     }
     if (f.dataset.act === 'cred-save') {

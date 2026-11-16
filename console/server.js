@@ -185,9 +185,16 @@ async function api(req, res, url, user) {
       store.audit(actor, 'changed alert destinations', app, (destinations || []).join(', ') || 'default chat');
       return send(res, 200, r);
     }
+    if (sub === '/reports' && m === 'POST') {
+      const { enabled, destinations } = await body(req);
+      const r = await agent('setReports', { app, enabled: !!enabled, destinations }, actor);
+      store.audit(actor, enabled ? 'changed run reports (on)' : 'changed run reports (off)', app, (destinations || []).join(', '));
+      return send(res, 200, r);
+    }
     if (sub === '/test-alert' && m === 'POST') {
-      const r = await agent('testAlert', { app }, actor);
-      store.audit(actor, 'sent a test alert', app);
+      const { reports } = await body(req);
+      const r = await agent('testAlert', { app, reports: !!reports }, actor);
+      store.audit(actor, reports ? 'sent a test run report' : 'sent a test alert', app);
       return send(res, 200, r);
     }
     if (sub === '/login' && m === 'POST') {

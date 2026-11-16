@@ -23,7 +23,7 @@ const CRED_FIELDS = ['URL', 'LOGIN_URL', 'EMAIL', 'USERNAME', 'PASSWORD'];
 
 const requireHome = createRequire(path.join(HOME, 'package.json'));
 const dotenv = requireHome('dotenv');
-const { resolveTargets } = await import(path.join(HOME, 'core', 'report.js'));
+const { resolveTargets, resolveReportTargets } = await import(path.join(HOME, 'core', 'report.js'));
 
 // ---------- helpers ----------
 class Refused extends Error {}
@@ -89,10 +89,10 @@ function registry() {
   try { return JSON.parse(fs.readFileSync(path.join(HOME, 'checks.json'), 'utf8')); } catch { return []; }
 }
 
+const crontab = () => spawnSync('crontab', ['-l'], { encoding: 'utf8' }).stdout || '';
 function cronEntries() {
-  const out = spawnSync('crontab', ['-l'], { encoding: 'utf8' });
   const entries = [];
-  for (const line of (out.stdout || '').split('\n')) {
+  for (const line of crontab().split('\n')) {
     const m = line.match(/^\s*([^#\s]\S*\s+\S+\s+\S+\s+\S+\s+\S+)\s+\S*\/run\.sh\s+(\S+)\s*$/);
     if (m) entries.push({ schedule: m[1], action: m[2] });
   }
@@ -214,10 +214,25 @@ function reportText(action, start) {
   return out.join('\n');
 }
 
-function retryText(m) {
+// run.sh's retry delay: ARGUS_RETRY_DELAY in the crontab, else 300 s.
+function retryDelayText() {
+  const m = crontab().match(/^\s*ARGUS_RETRY_DELAY=["']?(\d+)/m);
+  const sec = m ? Number(m[1]) : 300;
+  return sec % 60 ? `${sec} seconds` : `${sec / 60} minute${sec === 60 ? '' : 's'}`;
+}
+function retryText(m, delay) {
   if (m.changesData) return 'No retry: it changes data, so it alerts on the first failure';
-  if (m.noRetry) return 'Re-checks itself before alerting (no 5-minute retry)';
-  return 'Retries once after 5 minutes before alerting';
+  if (m.noRetry) return 'Re-checks itself before alerting (no retry between runs)';
+  return `Retries once after ${delay} before alerting`;
+}
+
+// Runs on a weekday for a cron schedule (minutes x hours), for the run-report volume estimate.
+function runsPerWeekday(expr) {
+  const [mi, h, dom, , dow] = expr.split(/\s+/);
+  const days = new Set([...cronField(dow, 0, 7)].map((d) => d % 7));
+  if (![1, 2, 3, 4, 5].some((d) => days.has(d))) return 0;
+  const n = cronField(mi, 0, 59).size * cronField(h, 0, 23).size;
+  return dom === '*' ? n : Math.ceil(n / 30);
 }
 
 function alertStatus(app) {
@@ -227,7 +242,15 @@ function alertStatus(app) {
   });
 }
 
+function reportStatus(app) {
+  return withArgusEnv(() => {
+    const r = resolveReportTargets(app);
+    return { enabled: r.enabled, targets: r.targets, problems: r.problems };
+  });
+}
+
 function status() {
+  const delay = retryDelayText();
   const reg = new Map(registry().map((c) => [c.action, c]));
   const cron = new Map(cronEntries().map((e) => [e.action, e.schedule]));
   const checks = knownActions().map((action) => {
@@ -252,12 +275,12 @@ function status() {
       action, app: info.app || null, appName: info.appName || info.app || null, name: info.name || action, site: info.site || '', description: info.description || '',
       steps: info.steps || [], schedule, scheduleText: schedule ? describeCron(schedule) : 'On demand',
       next: schedule && !paused ? nextRun(schedule) : null,
-      ...m, retry: retryText(m), paused, running: isRunning(action), state,
+      ...m, retry: retryText(m, delay), paused, running: isRunning(action), state,
       runs: runs.slice(-40).reverse(), daily: Object.values(daily).slice(-14).reverse(),
       totalRuns: runs.filter((r) => !r.skipped).length, failedRuns: runs.filter((r) => r.exit).length,
     };
   });
-  const apps = knownApps().map((app) => ({ app, alerts: alertStatus(app) }));
+  const apps = knownApps().map((app) => ({ app, alerts: alertStatus(app), reports: reportStatus(app) }));
   return { generatedAt: new Date().toISOString(), checks, apps, defaultAlerts: alertStatus(undefined) };
 }
 
@@ -378,7 +401,36 @@ const OPS = {
     // Addresses and the sign-in name are shown in the console; the password is only ever reported as set or not.
     const credentials = Object.fromEntries(CRED_FIELDS.map((f) => [f, f === 'PASSWORD' ? !!env[`${app}_${f}`] : env[`${app}_${f}`] || null]));
     const notify = env[`${app}_NOTIFY`] ? env[`${app}_NOTIFY`].split(',').map((s) => s.trim()).filter(Boolean) : [];
-    return { app, notify, alerts: alertStatus(app), credentials };
+    const reportList = env[`${app}_REPORTS`] ? env[`${app}_REPORTS`].split(',').map((s) => s.trim()).filter(Boolean) : [];
+    // Run-report volume: one message per destination per run (retries don't add one).
+    const cron = new Map(cronEntries().map((e) => [e.action, e.schedule]));
+    const perCheck = registry().filter((c) => c.app === app && cron.has(c.action) && validAction(c.action)).map((c) => ({
+      name: c.name || c.action, perWeekday: runsPerWeekday(cron.get(c.action)),
+      paused: fs.existsSync(path.join(HOME, 'config', 'paused', fileName(c.action))),
+    }));
+    return {
+      app, notify, alerts: alertStatus(app), credentials,
+      reports: { destinations: reportList, ...reportStatus(app) },
+      volume: { perCheck, perWeekday: perCheck.filter((c) => !c.paused).reduce((n, c) => n + c.perWeekday, 0) },
+    };
+  },
+
+  // Run reports: every run's report (passed or failed) to its own list. Switching it off
+  // keeps the list, so switching back on restores it.
+  setReports: ({ app, enabled, destinations }, actor) => {
+    requireApp(app);
+    if (!Array.isArray(destinations) || destinations.length > 20) refuse('Bad destination list.');
+    const list = destinations.map((d) => String(d).trim()).filter(Boolean);
+    if (list.some((d) => d.length > 200 || /[\n\r,]/.test(d))) refuse('Bad destination.');
+    if (enabled && !list.length) refuse('Add a destination for run reports first.');
+    const value = list.join(', ');
+    const check = withArgusEnv(() => resolveReportTargets(app), { [`${app}_REPORTS`]: value, [`${app}_REPORTS_ENABLED`]: enabled ? '1' : '' });
+    const errors = check.problems.filter((p) => !p.includes(': missing '));
+    if (list.length && errors.length) refuse(errors.join(' '));
+    writeEnvKey(`${app}_REPORTS`, list.length ? value : null);
+    writeEnvKey(`${app}_REPORTS_ENABLED`, enabled ? '1' : null);
+    logChange(actor, 'set-run-reports', app, `${enabled ? 'on' : 'off'}${list.length ? `: ${value}` : ''}`);
+    return { enabled: !!enabled, warnings: check.problems.filter((p) => p.includes(': missing ')) };
   },
 
   setNotify: ({ app, destinations }, actor) => {
@@ -407,12 +459,12 @@ const OPS = {
     return { set: value !== null };
   },
 
-  testAlert: ({ app }, actor) => {
+  testAlert: ({ app, reports }, actor) => {
     requireApp(app);
-    const out = spawnSync(NODE, [`--env-file=${ENV_FILE}`, path.join(HOME, 'tools', 'notify.js'), '--app', app, '--test'], {
+    const out = spawnSync(NODE, [`--env-file=${ENV_FILE}`, path.join(HOME, 'tools', 'notify.js'), '--app', app, '--test', ...(reports ? ['--reports'] : [])], {
       cwd: HOME, encoding: 'utf8', timeout: 90_000, env: { ...BASE_ENV },
     });
-    logChange(actor, 'test-alert', app);
+    logChange(actor, reports ? 'test-run-report' : 'test-alert', app);
     return { output: `${out.stdout || ''}${out.stderr || ''}`.trim().split('\n').slice(-30) };
   },
 

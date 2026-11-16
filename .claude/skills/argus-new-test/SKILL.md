@@ -55,7 +55,9 @@ in one message:
    Read `notifications.md` (next to this file) for what each channel needs and how
    the person finds the IDs, e.g. a chat's dialog ID or a Telegram chat ID. Then tell
    them exactly what to fetch. Alerts are sent only when a run fails; a passing run
-   only logs.
+   only logs. If they also want to see passing runs, offer **run reports**: every
+   run's report to a separate list, switched on in the console (see
+   `notifications.md`). Warn that a frequent check sends a lot of them.
 7. **Retry before alerting?** Under cron, a failed run can be re-run once, 5 minutes
    later, so only a second failure alerts. Ask, and always give your recommendation
    with the reason:
@@ -114,6 +116,9 @@ box themselves, over SSH or the DigitalOcean droplet console:
 **Alert destinations** (from step 1, item 6). Set them in one line,
 `<APP>_NOTIFY`, comma-separated, e.g.
 `<APP>_NOTIFY=bitrix:chat1234, email:ops@fusioneta.com, slack:ops`.
+Once the check is in `checks.json` and deployed, the person can also manage this list,
+run reports and the app login themselves in the console (https://argus.fusioneta.com.my,
+Setup), including the password, so it never goes through chat or SSH.
 `notifications.md` has the exact format for each channel. Destinations aren't secret,
 so you may add this line yourself. Check it isn't already there, then append it:
 `printf '<APP>_NOTIFY=...\n' >> /root/argus/.env`.
@@ -294,7 +299,9 @@ tail -25 /root/argus/logs/<app>-<action>.log
 ```
 
 Finish by telling the person the schedule, the log path, and where failure alerts
-go. The dry run prints the destination.
+go. The dry run prints the destination. Point them to the console
+(https://argus.fusioneta.com.my) to watch it, pause it, and change destinations or run
+reports; an admin invites them from People if they have no account yet.
 
 ## Changing or removing a check
 
