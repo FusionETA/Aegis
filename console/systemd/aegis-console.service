@@ -13,6 +13,7 @@ ExecStart=/opt/node24/bin/node /opt/aegis-console/server.js
 Environment=CONSOLE_PORT=3200
 Environment=CONSOLE_HOST=127.0.0.1
 Environment=CONSOLE_URL=https://aegis.fusioneta.com.my
+Environment=CONSOLE_ALSO_URLS=https://argus.fusioneta.com.my
 Environment=CONSOLE_DATA_DIR=/var/lib/aegis-console
 Environment=AGENT_SOCKET=/run/aegis-agent/agent.sock
 Restart=on-failure

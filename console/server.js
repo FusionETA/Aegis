@@ -15,6 +15,8 @@ import * as store from './store.js';
 const PORT = Number(process.env.CONSOLE_PORT || 3200);
 const HOST = process.env.CONSOLE_HOST || '127.0.0.1';
 const PUBLIC_URL = (process.env.CONSOLE_URL || 'https://aegis.fusioneta.com.my').replace(/\/$/, '');
+// Other addresses the console is also served on (the old argus one, until it only redirects).
+const ALSO_URLS = (process.env.CONSOLE_ALSO_URLS || '').split(',').map((u) => u.trim().replace(/\/$/, '')).filter(Boolean);
 const AGENT_SOCKET = process.env.AGENT_SOCKET || '/run/aegis-agent/agent.sock';
 const SECURE_COOKIE = process.env.CONSOLE_INSECURE_COOKIE !== '1';   // only local tests over plain http turn this off
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
@@ -74,7 +76,7 @@ async function body(req) {
 // that a form on another site can't send.
 function checkSameOrigin(req) {
   const origin = req.headers.origin;
-  const allowed = [PUBLIC_URL, `http://${HOST}:${PORT}`, `http://localhost:${PORT}`];
+  const allowed = [PUBLIC_URL, ...ALSO_URLS, `http://${HOST}:${PORT}`, `http://localhost:${PORT}`];
   if (req.headers['x-aegis'] !== '1' || (origin && !allowed.includes(origin))) throw new UserError(403, 'Request refused.');
 }
 
