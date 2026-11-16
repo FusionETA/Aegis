@@ -267,6 +267,11 @@ async function refreshStatus() {
   try {
     status = await api('/api/status');
     statusAt = new Date();
+    // Failing checks as a count on the Checks tab, like an unread badge.
+    const failing = status.checks.filter((c) => c.state?.status === 'fail' && !c.paused && !c.retired).length;
+    const badge = $('#fail-badge');
+    badge.hidden = !failing; badge.textContent = failing;
+    badge.setAttribute('aria-label', `${failing} failing`);
   } catch (err) {
     if (!status) $('#view-checks').innerHTML = `<p class="msg err">${esc(err.message)}</p>`;
     return;
@@ -774,6 +779,7 @@ window.addEventListener('hashchange', route);
   const initials = me.name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
   $('#who').innerHTML = `<span class="initials" aria-hidden="true">${esc(initials)}</span><span class="who-name">${esc(me.name)}${me.role === 'admin' ? ' · Admin' : ''}</span>`;
   $('#who').setAttribute('aria-label', `Your account: ${me.name}`);
+  $('#you-initials').textContent = initials;
   $('nav.views a[data-view="people"]').hidden = me.role !== 'admin';
   route();
   await refreshStatus();
