@@ -95,7 +95,12 @@ const link = (token) => `${PUBLIC_URL}/setup#t=${token}`;
 
 // ---------- pages ----------
 const PAGES = { '/': 'app.html', '/login': 'login.html', '/setup': 'setup.html' };
-const ASSETS = { '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml' };
+const ASSETS = {
+  '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml',
+  '.png': 'image/png', '.webmanifest': 'application/manifest+json',
+};
+// Where browsers and phones look for icons without asking the page first.
+const ROOT_FILES = { '/favicon.ico': 'icon-32.png', '/apple-touch-icon.png': 'apple-touch-icon.png', '/apple-touch-icon-precomposed.png': 'apple-touch-icon.png' };
 
 function serveFile(res, name) {
   const f = path.join(PUBLIC_DIR, name);
@@ -264,6 +269,7 @@ const server = http.createServer(async (req, res) => {
     const user = store.sessionUser(cookieToken(req));
     if (url.pathname.startsWith('/api/')) return await api(req, res, url, user);
     if (url.pathname.startsWith('/assets/') && req.method === 'GET') return serveFile(res, url.pathname.slice('/assets/'.length));
+    if (ROOT_FILES[url.pathname] && req.method === 'GET') return serveFile(res, ROOT_FILES[url.pathname]);
     if (PAGES[url.pathname] && req.method === 'GET') {
       if (url.pathname === '/' && !user) return send(res, 302, '', 'text/plain', { Location: '/login' });
       if (url.pathname === '/login' && user) return send(res, 302, '', 'text/plain', { Location: '/' });
