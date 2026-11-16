@@ -159,7 +159,8 @@ input[type="text"], input[type="email"], input[type="password"], input[type="url
 .toggle { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; }
 .toggle input { appearance: none; width: 36px; height: 20px; border-radius: 999px; background: var(--line); position: relative; cursor: pointer; flex: none; transition: background .15s; margin: 0; }
 .toggle input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--surface); transition: transform .15s; }
-.toggle input:checked { background: var(--warn); }
+.toggle input:checked { background: var(--pass); }
+.toggle .paused { color: var(--warn); }
 .toggle input:checked::after { transform: translateX(16px); }
 .linkbox { display: grid; gap: 8px; border: 1px solid var(--accent); background: var(--accent-soft); border-radius: 10px; padding: 12px 14px; }
 .linkbox code { overflow-wrap: anywhere; background: var(--surface); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); }

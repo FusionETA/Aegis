@@ -207,8 +207,8 @@ async function loadAppCard(app) {
   const signsIn = checks.some((c) => !c.noBrowser);   // checks without a browser never use an app login
   card.innerHTML = `
     <header><h2>${esc(appName(app))}</h2><p>${checks.map((c) => esc(c.name)).join(' · ')}</p></header>
-    <div class="set-row"><span class="lbl">Checks<small>A paused check doesn't run until it's resumed.</small></span>
-      <div class="cards">${checks.map((c) => `<label class="toggle"><input type="checkbox" data-act="pause-toggle" data-action="${esc(c.action)}" ${c.paused ? 'checked' : ''}> ${esc(c.name)} · ${c.paused ? '<b>Paused</b>' : `<span class="muted">${esc(c.scheduleText)}</span>`}</label>`).join('')}</div></div>
+    <div class="set-row"><span class="lbl">Checks<small>On: runs on its schedule. Turn a check off to pause it; it won't run until it's turned back on.</small></span>
+      <div class="cards">${checks.map((c) => `<label class="toggle"><input type="checkbox" data-act="pause-toggle" data-action="${esc(c.action)}" ${c.paused ? '' : 'checked'} aria-label="${esc(c.name)} is ${c.paused ? 'paused' : 'on'}"> ${esc(c.name)} · ${c.paused ? '<b class="paused">Paused</b>' : `<span class="muted">${esc(c.scheduleText)}</span>`}</label>`).join('')}</div></div>
     <div class="set-row"><span class="lbl">Where alerts go<small>Failures alert every destination here. Empty means the default chat.</small></span>
       <div class="cards">
         <div class="dests">${s.notify.length ? s.notify.map((d, i) => {
@@ -382,8 +382,9 @@ document.addEventListener('change', async (e) => {
   const el = e.target;
   if (el.dataset.act !== 'pause-toggle') return;
   try {
-    await api('/api/checks/pause', { method: 'POST', body: { action: el.dataset.action, paused: el.checked } });
-    toast(el.checked ? 'Paused. It won\'t run until resumed.' : 'Resumed. It runs on its schedule again.');
+    // The switch shows "on" (running on schedule); turning it off pauses the check.
+    await api('/api/checks/pause', { method: 'POST', body: { action: el.dataset.action, paused: !el.checked } });
+    toast(el.checked ? 'Turned on. It runs on its schedule again.' : 'Paused. It won\'t run until it\'s turned back on.');
     await refreshStatus(); renderSetup();
   } catch (err) { toast(err.message); el.checked = !el.checked; }
 });
