@@ -54,7 +54,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--ink); }
 .brand svg { flex: none; display: block; }
 .brand .mark { width: 54px; height: 35px; }
-.brand .word { width: 82px; height: 14px; }
+.brand .word { width: 100px; height: 14px; }
 .views { display: flex; gap: 4px; flex-wrap: wrap; }
 .views a { text-decoration: none; color: var(--muted); font-weight: 500; padding: 7px 12px; border-radius: 8px; }
 .views a:hover { color: var(--ink); background: var(--sunk); }
@@ -223,7 +223,7 @@ input[type="text"], input[type="email"], input[type="password"], input[type="url
 .auth .card { width: min(420px, 100%); }
 .auth .brand { flex-direction: column; gap: 14px; margin-bottom: 4px; }
 .auth .brand .mark { width: 92px; height: 60px; }
-.auth .brand .word { width: 108px; height: 19px; }
+.auth .brand .word { width: 136px; height: 19px; }
 
 @media (max-width: 860px) {
   .ledger-head { display: none; }

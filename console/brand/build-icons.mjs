@@ -1,13 +1,15 @@
 // Builds the Argus logo files in console/public from the shapes below:
-//   argus-logo.svg            eye + ΛRGUS wordmark, off-white on transparent (for docs, chat avatars)
+//   argus-logo.svg            eye + ΛRGUS wordmark as in the original, off-white on transparent
 //   favicon.svg               the eye on a dark rounded square (browser tab)
 //   icon-32.png               the same, 32 px (older browsers, /favicon.ico)
 //   apple-touch-icon.png      180 px, full square (iOS rounds the corners itself)
 //   icon-192.png, icon-512.png       rounded square (Android, desktop installs)
 //   icon-maskable-512.png     full bleed with the eye inside the safe circle (Android adaptive icons)
+// and puts the logo (eye + wordmark, in the text colour) into app.html, login.html and setup.html
+// between their <!-- brand --> and <!-- /brand --> markers.
 // Run after changing a shape:  /opt/node24/bin/node console/brand/build-icons.mjs
 // (Playwright's Chromium renders the PNGs.)
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -24,13 +26,18 @@ export const EYE = `
   <circle cx="622" cy="526" r="23"/>`;
 const EYE_BOX = { x: 430, y: 428, w: 398, h: 255 };
 
-// ΛRGUS, drawn as strokes on a 40-unit cap height.
-export const WORDMARK = `
-  <path d="M0,40 L17,0 L34,40"/>
-  <path d="M58,40 V1.8 H72 A10.6,10.6 0 0 1 72,23 H58 M71,23 L84,40"/>
-  <path d="M139,8.5 A18.5,20 0 1 0 142,23 H128"/>
-  <path d="M166,0 V25 A14.5,14.5 0 0 0 195,25 V0"/>
-  <path d="M240,7 C237,2.5 232.5,1.8 229,1.8 C222,1.8 218.5,5.5 218.5,10.5 C218.5,17 224,18.5 229.5,20 C235.5,21.6 241.5,23.5 241.5,30 C241.5,35.5 237,38.2 230,38.2 C224.5,38.2 219.5,36.5 217,32"/>`;
+// ΛRGUS, traced from the original artwork, in the same coordinates as the eye:
+// cap height 723.3–796.7, stroke 9. Strokes are clipped to the cap height so their
+// ends are cut level like the original's. ID names the clip path (unique per page).
+export const wordmark = (id = 'argus-cap') => `
+  <defs><clipPath id="${id}"><rect x="300" y="723.3" width="700" height="73.4"/></clipPath></defs>
+  <path d="M336,796.7 L376,723.3 L415.7,796.7 L405.7,796.7 L376,741.7 L346,796.7 Z"/>
+  <g fill="none" stroke="currentColor" stroke-width="9" clip-path="url(#${id})">
+    <path d="M483.3,800 V727.8 H519 A16.35,16.35 0 0 1 519,760.5 H483.3 M505,760.5 L542,802"/>
+    <path d="M667.6,738.8 A33.75,33.75 0 1 0 675.45,760.5 H645"/>
+    <path d="M746.3,720 V767.7 A26,26 0 0 0 798.3,767.7 V720"/>
+    <path d="M910.5,735 C904,729 896.5,727.5 889.5,727.5 C877.5,727.5 869.5,734 869.5,743.5 C869.5,754 880.5,757 891.5,760 C905,763.5 915,768 915,778 C915,788 904,793.7 890.5,793.7 C879,793.7 870,789.5 866,783"/>
+  </g>`;
 
 // The eye scaled to `width` and centred on (cx, cy).
 const eyeAt = (cx, cy, width) => {
@@ -46,9 +53,9 @@ function icon(size, { rounded, eyeShare }) {
   ${eyeAt(size / 2, size * 0.51, size * eyeShare)}</svg>`;
 }
 
-const logo = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 300" role="img" aria-label="Argus">
-  ${eyeAt(260, 112, 300)}
-  <g fill="none" stroke="${INK}" stroke-width="3.6" transform="translate(139 232)">${WORDMARK}</g></svg>`;
+// Eye and wordmark exactly as laid out in the original artwork.
+const logo = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="306 398 640 430" role="img" aria-label="Argus" color="${INK}" fill="${INK}">
+  ${EYE}${wordmark()}</svg>`;
 
 writeFileSync(join(OUT, 'argus-logo.svg'), logo + '\n');
 writeFileSync(join(OUT, 'favicon.svg'), icon(64, { rounded: true, eyeShare: 0.82 }) + '\n');
@@ -69,4 +76,14 @@ for (const [name, size, opts] of PNGS) {
   await page.close();
 }
 await browser.close();
-console.log(`wrote argus-logo.svg, favicon.svg, ${PNGS.map(([n]) => n).join(', ')} to ${OUT}`);
+// The logo inside the pages: two inline SVGs in the text colour, sized by console.css.
+const brand = `<svg class="mark" viewBox="426 424 406 263" fill="currentColor" aria-hidden="true">${EYE.replace(/\s*\n\s*/g, ' ')}</svg>`
+  + `<svg class="word" viewBox="332 719 588 82" fill="currentColor" aria-hidden="true">${wordmark().replace(/\s*\n\s*/g, ' ')}</svg>`;
+for (const page of ['app.html', 'login.html', 'setup.html']) {
+  const f = join(OUT, page);
+  const html = readFileSync(f, 'utf8');
+  if (!/<!-- brand -->[\s\S]*?<!-- \/brand -->/.test(html)) throw new Error(`${page}: no <!-- brand --> markers`);
+  writeFileSync(f, html.replace(/<!-- brand -->[\s\S]*?<!-- \/brand -->/, `<!-- brand -->${brand}<!-- /brand -->`));
+}
+
+console.log(`wrote argus-logo.svg, favicon.svg, ${PNGS.map(([n]) => n).join(', ')} and the page logos to ${OUT}`);
