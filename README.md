@@ -9,6 +9,10 @@ chat. Successful runs only log, unless the app has run reports switched on (ever
 run's report to a separate list). Most of this is set in the console at
 https://aegis.fusioneta.com.my.
 
+Aegis was called **Argus** until November 2026. The Argus logo, icons and their build
+script are kept in `brand/argus/` for use elsewhere. On the server, `/root/argus` is a
+link to `/root/aegis`, and https://argus.fusioneta.com.my forwards to the new address.
+
 **To add or change a check, ask Claude in a session on this repo.** The
 `aegis-new-test` skill (`.claude/skills/aegis-new-test/SKILL.md`) handles the
 whole flow: intake, read-only investigation, plan, script, test, deploy.
