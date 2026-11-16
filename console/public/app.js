@@ -309,7 +309,7 @@ async function loadApp(app) {
       <ul class="check-list">${checks.map((c) => `<li>
         ${c.retired ? `<span class="toggle"><span><b>${esc(c.name)}</b><small>Retired</small></span></span>` : `<label class="toggle"><input type="checkbox" data-act="pause-toggle" data-app="${esc(app)}" data-action="${esc(c.action)}" ${c.paused ? '' : 'checked'} aria-label="${esc(c.name)} is ${c.paused ? 'paused' : 'on'}">
           <span><b>${esc(c.name)}</b><small>${c.paused ? '<span class="paused">Paused</span>' : esc(c.scheduleText)}</small></span></label>`}
-        <a href="#check/${enc(c.action)}">Schedule and history</a></li>`).join('')}</ul>
+        <a href="#check/${enc(c.action)}">Details</a></li>`).join('')}</ul>
     </section>
 
     <section class="card">
