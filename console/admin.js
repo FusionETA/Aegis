@@ -1,17 +1,17 @@
-// Argus console accounts from the server's command line — for the first admin and
+// Aegis console accounts from the server's command line — for the first admin and
 // for emergencies (everyone locked out). Day to day, admins use the People page.
 //
 //   node console/admin.js add-admin  <email> "<Full Name>"   -> prints a one-time setup link
 //   node console/admin.js reset      <email>                 -> prints a one-time reset link
 //   node console/admin.js remove     <email>
 //   node console/admin.js list
-// Run as root; files stay owned by the console's user (argus-web).
+// Run as root; files stay owned by the console's user (aegis-web).
 import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import * as store from './store.js';
 
-const PUBLIC_URL = (process.env.CONSOLE_URL || 'https://argus.fusioneta.com.my').replace(/\/$/, '');
-const OWNER = process.env.CONSOLE_USER ?? 'argus-web';
+const PUBLIC_URL = (process.env.CONSOLE_URL || 'https://aegis.fusioneta.com.my').replace(/\/$/, '');
+const OWNER = process.env.CONSOLE_USER ?? 'aegis-web';
 const [cmd, email, name] = process.argv.slice(2);
 const actor = 'server command line';
 

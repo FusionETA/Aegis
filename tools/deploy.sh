@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy a new Argus check to the live box: fast-forward /root/argus to origin/main
+# Deploy a new Aegis check to the live box: fast-forward /root/aegis to origin/main
 # and append ONE cron line for it. Never edits or removes existing cron lines, and
 # never touches the AltomateHR jobs.
 #
@@ -8,7 +8,7 @@
 # Times are MYT (server tz). --dry-run shows what would change and changes nothing.
 set -euo pipefail
 
-LIVE="${ARGUS_LIVE:-/root/argus}"   # override only for testing against a sandbox copy
+LIVE="${AEGIS_LIVE:-/root/aegis}"   # override only for testing against a sandbox copy
 ACTION="${1:?usage: deploy.sh <app>/<action> \"<cron schedule>\" [--dry-run]}"
 SCHED="${2:?usage: deploy.sh <app>/<action> \"<cron schedule>\" [--dry-run]}"
 DRY="${3:-}"
@@ -23,7 +23,7 @@ for f in "${F[@]}"; do [[ "$f" =~ ^[0-9*/,-]+$ ]] || die "bad schedule field '$f
 [[ -z "$DRY" || "$DRY" == --dry-run ]] || die "unknown option '$DRY'"
 
 # One deploy at a time (two colleagues editing the crontab at once would lose a line).
-exec 9> /run/lock/argus-deploy.lock
+exec 9> /run/lock/aegis-deploy.lock
 flock -n 9 || die "another deploy is running"
 
 cd "$LIVE"
@@ -51,7 +51,7 @@ echo "== env keys read by plugins/${APP}: ${KEYS[*]:-(none found)}"
 
 # Where failure alerts will go, checked with the alert code being deployed (from
 # origin/main): every destination must be valid and have its credentials.
-NODE_BIN="${ARGUS_NODE:-/opt/node24/bin/node}"
+NODE_BIN="${AEGIS_NODE:-/opt/node24/bin/node}"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 git archive origin/main core tools | tar -x -C "$TMP"
 echo "== alerts:"
@@ -70,7 +70,7 @@ git diff --quiet HEAD origin/main -- package.json package-lock.json || NPM_CI=ye
 echo "== dependencies changed (npm ci after pull): ${NPM_CI}"
 
 CUR="$(crontab -l 2>/dev/null || true)"
-grep -q '^ARGUS_NODE=' <<< "$CUR" || die "crontab has no ARGUS_NODE= line — not the expected Argus crontab"
+grep -q '^AEGIS_NODE=' <<< "$CUR" || die "crontab has no AEGIS_NODE= line — not the expected Aegis crontab"
 if grep -qE "run\.sh ${ACTION}( |$)" <<< "$CUR"; then die "a cron line for ${ACTION} already exists:
 $(grep -E "run\.sh ${ACTION}( |$)" <<< "$CUR")"; fi
 LINE="${SCHED} ${LIVE}/run.sh ${ACTION}"
@@ -93,7 +93,7 @@ if [[ "$NPM_CI" == yes ]]; then
     || die "npm ci failed — node_modules may be broken and cron jobs will fail. Roll back: git -C $LIVE reset --hard $OLD && (cd $LIVE && PATH=$(dirname "$NODE_BIN"):\$PATH npm ci)"
   echo "== npm ci done"
 fi
-BAK="$(dirname "$LIVE")/argus-crontab.bak-$(date +%Y%m%d-%H%M%S)"
+BAK="$(dirname "$LIVE")/aegis-crontab.bak-$(date +%Y%m%d-%H%M%S)"
 echo "$CUR" > "$BAK"
 echo "$NEW" | crontab -
 crontab -l | grep -qxF "$LINE" || die "crontab install did not stick — previous crontab saved at $BAK"

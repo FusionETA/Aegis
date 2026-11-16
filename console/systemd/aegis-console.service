@@ -1,0 +1,30 @@
+# Aegis console web app (https://aegis.fusioneta.com.my via Caddy). Unprivileged user
+# aegis-web; can't read /root. Talks to Aegis only through aegis-agent.service.
+[Unit]
+Description=Aegis console web app
+After=network-online.target aegis-agent.service
+Wants=aegis-agent.service
+
+[Service]
+User=aegis-web
+Group=aegis-web
+WorkingDirectory=/opt/aegis-console
+ExecStart=/opt/node24/bin/node /opt/aegis-console/server.js
+Environment=CONSOLE_PORT=3200
+Environment=CONSOLE_HOST=127.0.0.1
+Environment=CONSOLE_URL=https://aegis.fusioneta.com.my
+Environment=CONSOLE_DATA_DIR=/var/lib/aegis-console
+Environment=AGENT_SOCKET=/run/aegis-agent/agent.sock
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/aegis-console
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=multi-user.target

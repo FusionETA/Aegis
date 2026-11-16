@@ -22,7 +22,7 @@ $('#setup').addEventListener('submit', async (e) => {
   if ($('#pw1').value !== $('#pw2').value) return fail('The two passwords don\'t match.');
   $('#go').disabled = true;
   const res = await fetch('/api/setup', {
-    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Argus': '1' },
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Aegis': '1' },
     body: JSON.stringify({ token, password: $('#pw1').value }),
   }).catch(() => null);
   if (res && res.ok) { location.href = '/'; return; }

@@ -1,4 +1,4 @@
-// Argus artemis/nginx — is AltomateHR's web server (nginx on the artemis droplet) up?
+// Aegis artemis/nginx — is AltomateHR's web server (nginx on the artemis droplet) up?
 // No login and no browser: a few plain requests, every 5 minutes.
 //   1. public site       GET https://hr.altomate.io/ -> 200 from nginx
 //   2. app behind nginx  GET /api/auth/refresh -> the app's own 405; 502/503/504 means
@@ -10,8 +10,8 @@
 // A failed probe is re-checked after 30 s before anything is reported. Passing runs
 // log one line.
 //
-// argus:no-browser
-// argus:no-retry — it re-checks itself after 30 s; run.sh's 5-minute retry would run
+// aegis:no-browser
+// aegis:no-retry — it re-checks itself after 30 s; run.sh's 5-minute retry would run
 // into the next 5-minute run.
 import 'dotenv/config';
 import http from 'node:http';
@@ -23,12 +23,12 @@ import { diagnose } from './lib/diagnose.js';
 
 const ACTION = 'Artemis nginx';
 const SITE_HOST = 'hr.altomate.io';
-// ARGUS_TEST_* overrides exist only for testing against local servers.
-const SITE = process.env.ARGUS_TEST_SITE || `https://${SITE_HOST}`;
-const PRIVATE_IP = process.env.ARGUS_TEST_PRIVATE_IP || '10.104.0.2';
-const DIRECT_PORT = Number(process.env.ARGUS_TEST_DIRECT_PORT || 80);
-const SSH_PORT = Number(process.env.ARGUS_TEST_SSH_PORT || 22);
-const CONFIRM_MS = Number(process.env.ARGUS_TEST_CONFIRM_MS || 30_000);
+// AEGIS_TEST_* overrides exist only for testing against local servers.
+const SITE = process.env.AEGIS_TEST_SITE || `https://${SITE_HOST}`;
+const PRIVATE_IP = process.env.AEGIS_TEST_PRIVATE_IP || '10.104.0.2';
+const DIRECT_PORT = Number(process.env.AEGIS_TEST_DIRECT_PORT || 80);
+const SSH_PORT = Number(process.env.AEGIS_TEST_SSH_PORT || 22);
+const CONFIRM_MS = Number(process.env.AEGIS_TEST_CONFIRM_MS || 30_000);
 const TIMEOUT_MS = 10_000;
 
 const errText = (err) =>
@@ -114,7 +114,7 @@ if (verdict.ok) {
 
 const result = { error: verdict.ok ? null : verdict.problems.map((p) => p.short).join('; ') };
 const report = [
-  `🤖 Argus — ${ACTION} Report`,
+  `🤖 Aegis — ${ACTION} Report`,
   `📅 ${nowMYT()} (MYT)`,
   '',
   ...(verdict.ok ? [] : [...verdict.problems.map((p) => `🔴 ${p.text}`), `(Still failing after a re-check ${CONFIRM_MS / 1000} s later.)`, '']),

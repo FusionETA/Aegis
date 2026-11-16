@@ -1,25 +1,25 @@
 ---
-name: argus-new-test
-description: Build a new Argus check (a scheduled Playwright smoke test) for one of FusionETA's apps, or change or remove an existing one, from the app link and a description of what to test. Investigates the app read-only first, proposes the test steps, and only then writes, tests and deploys the script. Use whenever someone wants Argus to test, monitor or smoke-test an app, page or flow ("add an Argus check for our booking site", "can Argus test the login on X every morning", "make a script that checks the invoice page loads", "change the Argus check for Y"), even if they don't say "Argus" or "Playwright".
+name: aegis-new-test
+description: Build a new Aegis check (a scheduled Playwright smoke test) for one of FusionETA's apps, or change or remove an existing one, from the app link and a description of what to test. Investigates the app read-only first, proposes the test steps, and only then writes, tests and deploys the script. Use whenever someone wants Aegis to test, monitor or smoke-test an app, page or flow ("add an Aegis check for our booking site", "can Aegis test the login on X every morning", "make a script that checks the invoice page loads", "change the Aegis check for Y"), even if they don't say "Aegis" or "Playwright".
 ---
 
-# Build a new Argus check
+# Build a new Aegis check
 
-Argus is FusionETA's unattended smoke-test bot. Each check is a headed Playwright
+Aegis is FusionETA's unattended smoke-test bot. Each check is a headed Playwright
 script in `plugins/<app>/<action>.js`, run on weekdays by root's cron on this droplet
-through `/root/argus/run.sh <app>/<action>`. A failure posts a report to the Bitrix
+through `/root/aegis/run.sh <app>/<action>`. A failure posts a report to the Bitrix
 chat(s) or people chosen for that check (step 1, item 6); passes only log. Read `README.md` in this repo for the layout and conventions.
 
-You are working **as root on the box that runs PROD Argus**. Follow these rules for
+You are working **as root on the box that runs PROD Aegis**. Follow these rules for
 the whole session, whoever asks:
 
 - **Leave AltomateHR alone.** Never run `clockin` or `clockout` (`plugins/altomatehr/`):
   they really clock the smoke account in and out. Never edit or remove the AltomateHR
   cron lines.
-- **Never edit `/root/argus` by hand.** It is the live checkout that cron runs. Do all work in this
-  session's own checkout of the repo. Code reaches `/root/argus` only through
+- **Never edit `/root/aegis` by hand.** It is the live checkout that cron runs. Do all work in this
+  session's own checkout of the repo. Code reaches `/root/aegis` only through
   `tools/deploy.sh` (step 9).
-- **Never show secrets.** Don't print, cat, grep the values of, or echo `/root/argus/.env`, and never put a
+- **Never show secrets.** Don't print, cat, grep the values of, or echo `/root/aegis/.env`, and never put a
   password in a command line, a commit, a log line or a report. If someone pastes a
   secret into the chat, don't repeat it, and tell them to change it.
 - **Read-only unless approved.** A check only navigates and looks. Any step that saves, submits, books,
@@ -81,12 +81,12 @@ underscores (`BOOKING_SITE_`).
 
 ## 2. Set up your checkout
 
-You're in the session's checkout of FusionETA/Argus (not `/root/argus`). Then:
+You're in the session's checkout of FusionETA/aegis (not `/root/aegis`). Then:
 
 ```bash
 git fetch -q origin main && git checkout -b feat/<app>-<action> origin/main
-git config remote.origin.pushurl git@github.com:FusionETA/Argus.git
-git config core.sshCommand "ssh -i /root/.ssh/argus_deploy_ed25519 -o IdentitiesOnly=yes"
+git config remote.origin.pushurl git@github.com:FusionETA/aegis.git
+git config core.sshCommand "ssh -i /root/.ssh/aegis_deploy_ed25519 -o IdentitiesOnly=yes"
 [ -d node_modules ] || PATH=/opt/node24/bin:$PATH npm ci
 ```
 
@@ -104,30 +104,30 @@ changes to tracked files. If anything looks off after a move, check `git status`
 Check which `<APP>_` keys already exist. This shows key **names only**:
 
 ```bash
-grep -oE '^<APP>_[A-Z0-9_]+=' /root/argus/.env
+grep -oE '^<APP>_[A-Z0-9_]+=' /root/aegis/.env
 ```
 
 Required: `<APP>_URL`, `<APP>_EMAIL` (or `<APP>_USERNAME`) and `<APP>_PASSWORD`;
 optional: `<APP>_LOGIN_URL`. If any are missing, ask the person to add them on the
 box themselves, over SSH or the DigitalOcean droplet console:
-`nano /root/argus/.env`, add the lines, save. **Don't collect the values in chat.**
+`nano /root/aegis/.env`, add the lines, save. **Don't collect the values in chat.**
 `.env` stays `chmod 600`.
 
 **Alert destinations** (from step 1, item 6). Set them in one line,
 `<APP>_NOTIFY`, comma-separated, e.g.
 `<APP>_NOTIFY=bitrix:chat1234, email:ops@fusioneta.com, slack:ops`.
 Once the check is in `checks.json` and deployed, the person can also manage this list,
-run reports and the app login themselves in the console (https://argus.fusioneta.com.my,
+run reports and the app login themselves in the console (https://aegis.fusioneta.com.my,
 Apps), including the password, so it never goes through chat or SSH.
 `notifications.md` has the exact format for each channel. Destinations aren't secret,
 so you may add this line yourself. Check it isn't already there, then append it:
-`printf '<APP>_NOTIFY=...\n' >> /root/argus/.env`.
+`printf '<APP>_NOTIFY=...\n' >> /root/aegis/.env`.
 
 Each channel also needs credentials, such as an SMTP login, a bot token or a webhook URL.
 Those are secrets. Check what's already there:
 
 ```bash
-/opt/node24/bin/node --env-file=/root/argus/.env tools/notify.js --app <app> --check
+/opt/node24/bin/node --env-file=/root/aegis/.env tools/notify.js --app <app> --check
 ```
 
 A ✗ line names exactly which keys are missing. The person adds them themselves, like
@@ -135,8 +135,8 @@ a password. Shared ones (`SMTP_HOST`, `SLACK_WEBHOOK_URL`, ...) serve every chec
 prefix one with `<APP>_` to override it for this check only, e.g.
 `<APP>_SMTP_FROM` or `<APP>_SLACK_WEBHOOK_URL`.
 
-To pass all of this to your scripts, run them with `--env-file=/root/argus/.env`. Put
-`ARGUS_NO_NOTIFY=1` in front of every test run, so test failures don't alert anyone.
+To pass all of this to your scripts, run them with `--env-file=/root/aegis/.env`. Put
+`AEGIS_NO_NOTIFY=1` in front of every test run, so test failures don't alert anyone.
 
 ## 4. Investigate, read-only
 
@@ -145,7 +145,7 @@ turns on the write guard, then screenshots and lists headings, buttons, fields,
 tables and links for each page. It never clicks.
 
 ```bash
-ARGUS_NO_NOTIFY=1 xvfb-run -a /opt/node24/bin/node --env-file=/root/argus/.env \
+AEGIS_NO_NOTIFY=1 xvfb-run -a /opt/node24/bin/node --env-file=/root/aegis/.env \
   tools/recon.js --app <app> --login / /path/one /path/two
 ```
 
@@ -160,7 +160,7 @@ default and logged as `[guard] allowed`. Blocking them logs the app out.
 Work out and write down:
 - **Login:** how it works: a normal redirect, or an SPA that stays on `/login` (like
   AltomateHR). Is there MFA, a captcha or an SSO hop? If there's MFA or a captcha, stop and tell
-  the person: Argus can't get past it unattended.
+  the person: Aegis can't get past it unattended.
 - **Each step:** the page or view and its URL, and the most stable locator: prefer
   `getByRole` / `getByLabel` / `getByText` over CSS classes.
 - **Read vs write:** which steps are reads and which would write. Note background POSTs too,
@@ -194,14 +194,14 @@ Copy that approval into the commit message (step 8). Without it, keep the check
 read-only.
 
 A check that changes data must also contain a comment line with the marker
-`argus:no-retry`, next to its imports, saying what it changes. `run.sh` normally re-runs a failed check
+`aegis:no-retry`, next to its imports, saying what it changes. `run.sh` normally re-runs a failed check
 once before alerting; the marker stops that, so a half-finished write is never
 repeated. See `plugins/altomatehr/clockin.js`. Add the same marker to any read-only
 check where the person chose no retry (step 1, item 7), with their reason.
 
 ## 6. Write the script
 
-Start from `.claude/skills/argus-new-test/template.js`. Copy it to
+Start from `.claude/skills/aegis-new-test/template.js`. Copy it to
 `plugins/<app>/<action>.js` and also write `plugins/<app>/lib/login.js`. The login
 helper exports `login(page, url, user, password)` and returns
 `{ success, attemptsUsed, landedOn, error }`; see `plugins/altomatehr/lib/login.js`.
@@ -212,7 +212,7 @@ Conventions:
 - **Results:** use one `result` object. Set `result.error` on any failure; that's what triggers
   the alert and makes the script exit 1. Successful runs only log. Under cron, a failure
   is retried once after 5 minutes before anyone is alerted, unless the script has the
-  `argus:no-retry` marker (step 5). The first pass after a failure sends "✅ … is passing again" (Argus can't tell what fixed it).
+  `aegis:no-retry` marker (step 5). The first pass after a failure sends "✅ … is passing again" (Aegis can't tell what fixed it).
   Both are automatic and need no code.
 - **Screenshots:** always close with `closeBrowser(browser, result)`, not `closeBrowser(browser)`.
   On a failure it screenshots the page first, and the alert carries the image.
@@ -220,13 +220,13 @@ Conventions:
   time, 👤 account, one line per stage. Name the failing step and the URL.
 - **Logging:** prefix log lines with `[<action>]`. Never log passwords or tokens.
 - **Uptime-style checks** (is a site or server up?) don't need a login or a browser: use
-  plain requests, add an `argus:no-browser` line, and pass `quietPass: true` to
+  plain requests, add an `aegis:no-browser` line, and pass `quietPass: true` to
   `sendReportOnFailure` so passing runs log one line. If it runs every few minutes,
-  re-check inside the script instead of `run.sh`'s 5-minute retry (`argus:no-retry`).
+  re-check inside the script instead of `run.sh`'s 5-minute retry (`aegis:no-retry`).
   Model: `plugins/artemis/nginx.js`.
 - **Console listing:** add the check to `checks.json` (action, app prefix, appName,
-  name, site, description, steps), so the Argus console shows it properly. A check that
-  changes data also gets an `argus:changes-data` line; the console then never offers
+  name, site, description, steps), so the Aegis console shows it properly. A check that
+  changes data also gets an `aegis:changes-data` line; the console then never offers
   "Run now" for it.
 - **Shared code:** put helpers several checks need in `plugins/<app>/lib/`. Keep `core/`
   app-agnostic, and don't change `core/` without checking that the AltomateHR jobs
@@ -238,7 +238,7 @@ Conventions:
 Run from your checkout with alerts switched off:
 
 ```bash
-ARGUS_NO_NOTIFY=1 xvfb-run -a /opt/node24/bin/node --env-file=/root/argus/.env plugins/<app>/<action>.js
+AEGIS_NO_NOTIFY=1 xvfb-run -a /opt/node24/bin/node --env-file=/root/aegis/.env plugins/<app>/<action>.js
 ```
 
 - Get it passing at least twice in a row.
@@ -246,8 +246,8 @@ ARGUS_NO_NOTIFY=1 xvfb-run -a /opt/node24/bin/node --env-file=/root/argus/.env p
   `<APP>_URL=https://example.invalid` before the command. Confirm the report names
   the failure and `result.error` is set.
 - **Check the alerts really arrive.** This is required for every check, and needs no
-  deliberate failure. Tell the person to expect a "🧪 Argus test alert", then:
-  `/opt/node24/bin/node --env-file=/root/argus/.env tools/notify.js --app <app> --test`.
+  deliberate failure. Tell the person to expect a "🧪 Aegis test alert", then:
+  `/opt/node24/bin/node --env-file=/root/aegis/.env tools/notify.js --app <app> --test`.
   Every destination must log `[report] sent to <channel>:<to>`. Ask the person to
   confirm each one arrived; email may land in spam the first time. For each
   `failed for …` line, see the troubleshooting notes in `notifications.md`.
@@ -287,33 +287,33 @@ credentials.
 tools/deploy.sh <app>/<action> "<min> <hour> * * 1-5" --dry-run
 ```
 
-On their yes, run it again without `--dry-run`. It fast-forwards `/root/argus` to
-`main`, saves a crontab backup to `/root/argus-crontab.bak-<timestamp>`, and adds
+On their yes, run it again without `--dry-run`. It fast-forwards `/root/aegis` to
+`main`, saves a crontab backup to `/root/aegis-crontab.bak-<timestamp>`, and adds
 exactly one line.
 
 If the check is read-only, do one live run through the real wrapper and show the log:
 
 ```bash
-ARGUS_NODE=/opt/node24/bin/node /root/argus/run.sh <app>/<action>
-tail -25 /root/argus/logs/<app>-<action>.log
+AEGIS_NODE=/opt/node24/bin/node /root/aegis/run.sh <app>/<action>
+tail -25 /root/aegis/logs/<app>-<action>.log
 ```
 
 Finish by telling the person the schedule, the log path, and where failure alerts
 go. The dry run prints the destination. Point them to the console
-(https://argus.fusioneta.com.my) to watch it, pause it, and change destinations or run
+(https://aegis.fusioneta.com.my) to watch it, pause it, and change destinations or run
 reports; an admin invites them from People if they have no account yet.
 
 ## Changing or removing a check
 
 - **Changing:** do the same steps 2–9. Skip the cron part of step 9: `deploy.sh` refuses
-  when the line already exists. Instead, fast-forward `/root/argus` yourself:
-  `git -C /root/argus pull --ff-only`, after checking `git -C /root/argus status`
+  when the line already exists. Instead, fast-forward `/root/aegis` yourself:
+  `git -C /root/aegis pull --ff-only`, after checking `git -C /root/aegis status`
   is clean. If `package.json` or `package-lock.json` changed, follow it with
-  `cd /root/argus && PATH=/opt/node24/bin:$PATH npm ci`.
-- **Rescheduling or retiring:** prefer the console (https://argus.fusioneta.com.my): a
+  `cd /root/aegis && PATH=/opt/node24/bin:$PATH npm ci`.
+- **Rescheduling or retiring:** prefer the console (https://aegis.fusioneta.com.my): a
   check's page has Change schedule (members for read-only checks, admins for checks that
   change data) and Retire (admins). It edits only that check's crontab line and backs up
   the crontab first. By hand, if the console can't do it: back up first with
-  `crontab -l > /root/argus-crontab.bak-$(date +%Y%m%d-%H%M%S)`. Change only that
+  `crontab -l > /root/aegis-crontab.bak-$(date +%Y%m%d-%H%M%S)`. Change only that
   check's line, show the person the diff, and install it on their yes. Never
-  touch the `ARGUS_NODE=` line or the AltomateHR lines.
+  touch the `AEGIS_NODE=` line or the AltomateHR lines.

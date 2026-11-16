@@ -1,4 +1,4 @@
-// TEMPLATE for a new Argus check — copy to plugins/<app>/<action>.js and replace
+// TEMPLATE for a new Aegis check — copy to plugins/<app>/<action>.js and replace
 // every MY_APP / my-app / "TODO" below. Mirrors plugins/altomatehr/claims-check.js.
 import 'dotenv/config';
 import { launchBrowser, closeBrowser } from '../../core/browser.js';
@@ -7,7 +7,7 @@ import { sendReportOnFailure } from '../../core/report.js';
 import { nowMYT } from '../../core/time.js';
 import { login } from './lib/login.js';
 
-// Argus my-app — READ-ONLY smoke test: TODO one line on what it proves.
+// Aegis my-app — READ-ONLY smoke test: TODO one line on what it proves.
 // TODO: which pages it walks and where it stops (e.g. "up to the form, then Cancel").
 
 const ACTION = 'TODO Human Name';
@@ -75,7 +75,7 @@ function buildReport(r) {
       : `⚠️ FAILED — ${r.check?.error ?? r.error ?? 'unknown'}`;
 
   return [
-    `🤖 Argus — ${ACTION} Report`,
+    `🤖 Aegis — ${ACTION} Report`,
     `📅 ${nowMYT()} (MYT)`,
     `👤 Account: ${USER}`,
     ``,

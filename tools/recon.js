@@ -1,4 +1,4 @@
-// Argus recon — READ-ONLY page inventory for planning a new check.
+// Aegis recon — READ-ONLY page inventory for planning a new check.
 //
 // Logs in (optional), turns on the write guard, then for each URL: loads it,
 // screenshots it and lists headings, buttons, links, form fields, tables and
@@ -8,7 +8,7 @@
 // <APP>_PASSWORD, optional <APP>_LOGIN_URL) — never from the command line.
 //
 // Usage (from the repo root, headed browser needs a display):
-//   ARGUS_NO_NOTIFY=1 xvfb-run -a /opt/node24/bin/node --env-file=/root/argus/.env \
+//   AEGIS_NO_NOTIFY=1 xvfb-run -a /opt/node24/bin/node --env-file=/root/aegis/.env \
 //     tools/recon.js --app myapp [--login] [--allow-post <regex>]... <url-or-path>...
 // Paths ("/settings") are resolved against <APP>_URL.
 import { mkdirSync, writeFileSync } from 'node:fs';

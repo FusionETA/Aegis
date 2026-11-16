@@ -10,17 +10,17 @@
 <link rel="icon" href="/assets/icon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
 <link rel="manifest" href="/assets/manifest.webmanifest">
-<meta name="apple-mobile-web-app-title" content="Argus">
+<meta name="apple-mobile-web-app-title" content="Aegis">
 <meta name="theme-color" content="#f2f5f6" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0d1418" media="(prefers-color-scheme: dark)">
 <link rel="stylesheet" href="/assets/console.css">
-<title>Choose a password · Argus</title>
+<title>Choose a password · Aegis</title>
 <script src="/assets/setup.js" defer></script>
 </head>
 <body>
 <div class="auth">
   <form class="card" id="setup" novalidate>
-    <a class="brand" href="/" aria-label="Argus"><!-- brand --><svg class="mark" viewBox="426 424 406 263" fill="currentColor" aria-hidden="true"> <path d="M519,506 C560,410 692,393 828,510 C732,463 600,418 519,506 Z"/> <path d="M430,586 C480,550 545,500 620,489 C700,496 762,526 818,533 L612,683 L757,541 C720,526 680,511 640,509 L603,509 C562,516 510,540 473,566 C515,566 560,590 604,635 C578,616 532,590 487,581 C462,577 442,580 430,586 Z"/> <path fill-rule="evenodd" d="M555.5,529 A67,67 0 1 0 688.5,529 Z M564,529 A58,58 0 1 0 680,529 Z"/> <circle cx="622" cy="526" r="23"/></svg><svg class="word" viewBox="332 719 588 82" fill="currentColor" aria-hidden="true"> <defs><clipPath id="argus-cap"><rect x="300" y="723.3" width="700" height="73.4"/></clipPath></defs> <path d="M336,796.7 L376,723.3 L415.7,796.7 L405.7,796.7 L376,741.7 L346,796.7 Z"/> <g fill="none" stroke="currentColor" stroke-width="9" clip-path="url(#argus-cap)"> <path d="M483.3,800 V727.8 H519 A16.35,16.35 0 0 1 519,760.5 H483.3 M505,760.5 L542,802"/> <path d="M667.6,738.8 A33.75,33.75 0 1 0 675.45,760.5 H645"/> <path d="M746.3,720 V767.7 A26,26 0 0 0 798.3,767.7 V720"/> <path d="M910.5,735 C904,729 896.5,727.5 889.5,727.5 C877.5,727.5 869.5,734 869.5,743.5 C869.5,754 880.5,757 891.5,760 C905,763.5 915,768 915,778 C915,788 904,793.7 890.5,793.7 C879,793.7 870,789.5 866,783"/> </g></svg><!-- /brand --></a>
+    <a class="brand" href="/" aria-label="Aegis"><!-- brand --><svg class="mark" viewBox="426 424 406 263" fill="currentColor" aria-hidden="true"> <path d="M519,506 C560,410 692,393 828,510 C732,463 600,418 519,506 Z"/> <path d="M430,586 C480,550 545,500 620,489 C700,496 762,526 818,533 L612,683 L757,541 C720,526 680,511 640,509 L603,509 C562,516 510,540 473,566 C515,566 560,590 604,635 C578,616 532,590 487,581 C462,577 442,580 430,586 Z"/> <path fill-rule="evenodd" d="M555.5,529 A67,67 0 1 0 688.5,529 Z M564,529 A58,58 0 1 0 680,529 Z"/> <circle cx="622" cy="526" r="23"/></svg><svg class="word" viewBox="332 719 588 82" fill="currentColor" aria-hidden="true"> <defs><clipPath id="aegis-cap"><rect x="300" y="723.3" width="700" height="73.4"/></clipPath></defs> <path d="M336,796.7 L376,723.3 L415.7,796.7 L405.7,796.7 L376,741.7 L346,796.7 Z"/> <g fill="none" stroke="currentColor" stroke-width="9" clip-path="url(#aegis-cap)"> <path d="M483.3,800 V727.8 H519 A16.35,16.35 0 0 1 519,760.5 H483.3 M505,760.5 L542,802"/> <path d="M667.6,738.8 A33.75,33.75 0 1 0 675.45,760.5 H645"/> <path d="M746.3,720 V767.7 A26,26 0 0 0 798.3,767.7 V720"/> <path d="M910.5,735 C904,729 896.5,727.5 889.5,727.5 C877.5,727.5 869.5,734 869.5,743.5 C869.5,754 880.5,757 891.5,760 C905,763.5 915,768 915,778 C915,788 904,793.7 890.5,793.7 C879,793.7 870,789.5 866,783"/> </g></svg><!-- /brand --></a>
     <header><h1 id="title">Choose your password</h1><p id="intro">Checking your link…</p></header>
     <div class="form" id="fields" hidden>
       <label for="pw1">New password<small>At least 10 characters.</small><input type="password" id="pw1" autocomplete="new-password" required></label>

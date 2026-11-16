@@ -1,11 +1,11 @@
-// Argus alert destinations for one app: list them, or send a test alert to all.
+// Aegis alert destinations for one app: list them, or send a test alert to all.
 //
-//   node --env-file=/root/argus/.env tools/notify.js --app <app> --check
+//   node --env-file=/root/aegis/.env tools/notify.js --app <app> --check
 //       Lists <APP>_NOTIFY's destinations and what's missing. Exit 1 on any problem.
-//   node --env-file=/root/argus/.env tools/notify.js --app <app> --test
+//   node --env-file=/root/aegis/.env tools/notify.js --app <app> --test
 //       Sends a clearly-labelled test message to every destination.
 // Add --reports to do the same for the app's run-report list (<APP>_REPORTS) instead.
-//   node --env-file=/root/argus/.env tools/notify.js --to "<channel:to>, …" --check | --test
+//   node --env-file=/root/aegis/.env tools/notify.js --to "<channel:to>, …" --check | --test
 //       The same for an explicit destination list (the console's channel tests).
 // <app> is the plugin folder name (my-app) or its env prefix (MY_APP). Omit --app
 // for the default destination the AltomateHR scripts use. Never prints secrets.
@@ -34,15 +34,15 @@ if (mode === 'test') {
   const what = toArg ? 'message' : reports ? 'run report' : 'alert';
   await sendReport(
     [
-      `🧪 Argus test ${what}${app ? ` for ${app}` : ''} — please ignore.`,
+      `🧪 Aegis test ${what}${app ? ` for ${app}` : ''} — please ignore.`,
       `📅 ${nowMYT()} (MYT)`,
       toArg
-        ? 'If you can read this, this Argus channel works and reaches this destination.'
+        ? 'If you can read this, this Aegis channel works and reaches this destination.'
         : reports
-        ? 'If you can read this, Argus run reports (every run, passed or failed) reach this destination.'
-        : 'If you can read this, Argus failure alerts reach this destination.',
+        ? 'If you can read this, Aegis run reports (every run, passed or failed) reach this destination.'
+        : 'If you can read this, Aegis failure alerts reach this destination.',
     ].join('\n'),
-    { app, resolved, subject: `[Argus] test ${what}${app ? ` for ${app}` : ''} — please ignore` },
+    { app, resolved, subject: `[Aegis] test ${what}${app ? ` for ${app}` : ''} — please ignore` },
   );
 }
 process.exitCode = problems.length || !targets.length ? 1 : 0;

@@ -1,6 +1,6 @@
-/* Argus console. Layout: a calm watch-room — one top bar (brand, views, account); checks
+/* Aegis console. Layout: a calm watch-room — one top bar (brand, views, account); checks
    as ledgers grouped by app, each opening its own page; settings one app at a time. The logo is
-   the Argus eye and ΛRGUS wordmark (console/brand/build-icons.mjs); small eyes mark each run. */
+   the Aegis eye and ΛEGIS wordmark (console/brand/build-icons.mjs); small eyes mark each run. */
 :root {
   --glass: rgb(255 255 255 / .72); --glass-edge: rgb(255 255 255 / .7); --glass-shine: rgb(255 255 255 / .9); --glass-active: rgb(20 34 42 / .08);
   --bg: #f2f5f6;

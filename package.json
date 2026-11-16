@@ -1,5 +1,5 @@
 {
-  "name": "argus",
+  "name": "aegis",
   "version": "1.0.0",
   "type": "module",
   "description": "Modular unattended browser smoke-test bot",

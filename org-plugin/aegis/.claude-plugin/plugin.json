@@ -1,0 +1,5 @@
+{
+  "name": "aegis",
+  "version": "0.1.0",
+  "description": "Entry point for Aegis, FusionETA's scheduled Playwright smoke-test bot: routes requests to add, change or check an Aegis test to the right session and repo skill."
+}

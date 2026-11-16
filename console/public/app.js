@@ -1,4 +1,4 @@
-// Argus console. Views (in the address after #):
+// Aegis console. Views (in the address after #):
 //   checks            every check, grouped by app
 //   check/<action>    one check: status, history, how it behaves
 //   apps/<APP>        one app's settings: checks on/off, notifications, app login
@@ -26,7 +26,7 @@ const FORMATS = 'Formats: bitrix:chat1234 (group chat), bitrix:57 (a person), em
 async function api(path, { method = 'GET', body } = {}) {
   const res = await fetch(path, {
     method, credentials: 'same-origin',
-    headers: method === 'GET' ? {} : { 'Content-Type': 'application/json', 'X-Argus': '1' },
+    headers: method === 'GET' ? {} : { 'Content-Type': 'application/json', 'X-Aegis': '1' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (res.status === 401) { location.href = '/login'; throw new Error('Please sign in.'); }
@@ -133,7 +133,7 @@ function renderCheck(action) {
   const v = $('#view-check');
   if (!status) { v.innerHTML = '<p class="muted">Loading…</p>'; return; }
   const c = status.checks.find((x) => x.action === action);
-  if (!c) { v.innerHTML = '<p class="msg err">That check isn\'t in Argus any more.</p><p><a href="#checks">Back to all checks</a></p>'; return; }
+  if (!c) { v.innerHTML = '<p class="msg err">That check isn\'t in Aegis any more.</p><p><a href="#checks">Back to all checks</a></p>'; return; }
   const [cls, text] = stateOf(c);
   const last = c.runs.find((r) => !r.skipped);
   const info = appInfo(c.app);
@@ -363,16 +363,16 @@ async function loadApp(app) {
 // ---------- Channels ----------
 const PLACEHOLDER = {
   BITRIX_WEBHOOK_URL: 'https://fusioneta.bitrix24.com/rest/57/abc123…/', BITRIX_DIALOG_ID: 'chat6356',
-  SMTP_HOST: 'smtp.office365.com', SMTP_PORT: '587', SMTP_USER: 'argus@fusioneta.com', SMTP_FROM: 'Argus <argus@fusioneta.com>',
+  SMTP_HOST: 'smtp.office365.com', SMTP_PORT: '587', SMTP_USER: 'aegis@fusioneta.com', SMTP_FROM: 'Aegis <aegis@fusioneta.com>',
   TELEGRAM_BOT_TOKEN: '123456789:AA…', SLACK_WEBHOOK_URL: 'https://hooks.slack.com/services/…', TEAMS_WEBHOOK_URL: 'https://….logic.azure.com/…',
-  GOOGLECHAT_WEBHOOK_URL: 'https://chat.googleapis.com/v1/spaces/…', WEBHOOK_URL: 'https://n8n.example.com/webhook/argus',
+  GOOGLECHAT_WEBHOOK_URL: 'https://chat.googleapis.com/v1/spaces/…', WEBHOOK_URL: 'https://n8n.example.com/webhook/aegis',
 };
 const TEST_TO = { bitrix: 'chat1234 or a user number (empty: the default chat)', email: 'you@fusioneta.com', telegram: 'Chat ID, e.g. -1001234567890' };
 
 async function renderChannels() {
   const v = $('#view-channels');
   const admin = me?.role === 'admin';
-  const head = `<div class="lead"><h1>Channels</h1><p>Who Argus sends notifications as, per channel. Apps without their own list use the default chat.
+  const head = `<div class="lead"><h1>Channels</h1><p>Who Aegis sends notifications as, per channel. Apps without their own list use the default chat.
     ${admin ? 'Webhook URLs, tokens and passwords are saved on the server and never shown again.' : 'Admins set up and change channels.'}</p></div>`;
   v.innerHTML = `${head}<p class="muted">Checking each channel…</p>`;
   let data;
@@ -451,7 +451,7 @@ async function renderPeople() {
   v.innerHTML = `<div class="page-head"><div class="lead"><h1>People</h1><p>Who can use the console. Members see everything and can change apps; admins also manage people.</p></div>
       <div class="actions"><button class="btn primary" type="button" data-act="invite-open" ${inviteOpen ? 'hidden' : ''}>Invite someone</button></div></div>
     <div id="linkbox" hidden></div>
-    <section class="card narrow" id="invite-card" ${inviteOpen ? '' : 'hidden'}><header><h2>Invite someone</h2><p>They get a one-time link (24 hours) to choose their own password. With a Bitrix user ID, Argus sends it to them as a Bitrix message.</p></header>
+    <section class="card narrow" id="invite-card" ${inviteOpen ? '' : 'hidden'}><header><h2>Invite someone</h2><p>They get a one-time link (24 hours) to choose their own password. With a Bitrix user ID, Aegis sends it to them as a Bitrix message.</p></header>
       <form class="form" id="invite">
         <label>Name<input type="text" name="name" required></label>
         <label>Work email<input type="email" name="email" required></label>

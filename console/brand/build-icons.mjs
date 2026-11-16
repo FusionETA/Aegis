@@ -1,5 +1,5 @@
-// Builds the Argus logo files in console/public from the shapes below:
-//   argus-logo.svg            eye + ΛRGUS wordmark as in the original, off-white on transparent
+// Builds the Aegis logo files in console/public from the shapes below:
+//   aegis-logo.svg            eye + ΛEGIS wordmark as in the original, off-white on transparent
 //   favicon.svg               the eye on a dark rounded square (browser tab)
 //   icon-32.png               the same, 32 px (older browsers, /favicon.ico)
 //   apple-touch-icon.png      180 px, full square (iOS rounds the corners itself)
@@ -26,10 +26,10 @@ export const EYE = `
   <circle cx="622" cy="526" r="23"/>`;
 const EYE_BOX = { x: 430, y: 428, w: 398, h: 255 };
 
-// ΛRGUS, traced from the original artwork, in the same coordinates as the eye:
+// ΛEGIS, traced from the original artwork, in the same coordinates as the eye:
 // cap height 723.3–796.7, stroke 9. Strokes are clipped to the cap height so their
 // ends are cut level like the original's. ID names the clip path (unique per page).
-export const wordmark = (id = 'argus-cap') => `
+export const wordmark = (id = 'aegis-cap') => `
   <defs><clipPath id="${id}"><rect x="300" y="723.3" width="700" height="73.4"/></clipPath></defs>
   <path d="M336,796.7 L376,723.3 L415.7,796.7 L405.7,796.7 L376,741.7 L346,796.7 Z"/>
   <g fill="none" stroke="currentColor" stroke-width="9" clip-path="url(#${id})">
@@ -54,10 +54,10 @@ function icon(size, { rounded, eyeShare }) {
 }
 
 // Eye and wordmark exactly as laid out in the original artwork.
-const logo = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="306 398 640 430" role="img" aria-label="Argus" color="${INK}" fill="${INK}">
+const logo = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="306 398 640 430" role="img" aria-label="Aegis" color="${INK}" fill="${INK}">
   ${EYE}${wordmark()}</svg>`;
 
-writeFileSync(join(OUT, 'argus-logo.svg'), logo + '\n');
+writeFileSync(join(OUT, 'aegis-logo.svg'), logo + '\n');
 writeFileSync(join(OUT, 'favicon.svg'), icon(64, { rounded: true, eyeShare: 0.82 }) + '\n');
 
 const PNGS = [
@@ -86,4 +86,4 @@ for (const page of ['app.html', 'login.html', 'setup.html']) {
   writeFileSync(f, html.replace(/<!-- brand -->[\s\S]*?<!-- \/brand -->/, `<!-- brand -->${brand}<!-- /brand -->`));
 }
 
-console.log(`wrote argus-logo.svg, favicon.svg, ${PNGS.map(([n]) => n).join(', ')} and the page logos to ${OUT}`);
+console.log(`wrote aegis-logo.svg, favicon.svg, ${PNGS.map(([n]) => n).join(', ')} and the page logos to ${OUT}`);
