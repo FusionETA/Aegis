@@ -494,6 +494,8 @@ function renderAccount() {
         <div class="actions"><button class="btn primary" type="submit">Change password</button></div>
         <p class="msg" id="pw-msg" hidden></p>
       </form></section>
+    ${me.role === 'admin' ? `<section class="card narrow"><header><h2>People</h2><p>Invite colleagues and manage who can use the console.</p></header>
+      <div class="actions"><a class="btn" href="#people">Manage people</a></div></section>` : ''}
     <section class="card narrow"><header><h2>Sign out</h2><p>Signs you out in this browser.</p></header>
       <div class="actions"><button class="btn" type="button" data-act="signout">Sign out</button></div></section>`;
 }
@@ -760,7 +762,8 @@ function route() {
   if (v === 'people' && me?.role !== 'admin') v = 'checks';
   for (const p of document.querySelectorAll('[data-panel]')) p.hidden = p.dataset.panel !== v;
   for (const a of document.querySelectorAll('nav.views a')) {
-    if (a.dataset.view === (NAV_OF[v] || v)) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    // On phones People lives under the "You" tab, so that tab stays lit there.
+    if (a.dataset.view === (NAV_OF[v] || v) || (v === 'people' && a.classList.contains('you'))) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   }
   if (`${v}/${arg}` !== shown) { window.scrollTo(0, 0); shown = `${v}/${arg}`; }
   if (v !== 'people') { lastLink = null; inviteOpen = false; }

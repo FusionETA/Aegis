@@ -259,6 +259,19 @@ input[type="text"], input[type="email"], input[type="password"], input[type="url
   .views a svg { display: block; width: 25px; height: 25px; }
   .views a.you { display: grid; }
   .views .initials { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 10.5px; font-weight: 700; letter-spacing: .02em; }
+  /* Order on phones: Apps · Channels · (Checks) · Activity · You — Checks in the middle as a
+     larger, raised accent button. People is reached from the You page. */
+  .views a[data-view="apps"] { order: 1; } .views a[data-view="channels"] { order: 2; }
+  .views a[data-view="checks"] { order: 3; } .views a[data-view="activity"] { order: 4; } .views a.you { order: 5; }
+  .views a[data-view="people"] { display: none !important; }
+  .views a[data-view="checks"], .views a[data-view="checks"][aria-current="page"] { background: none; color: var(--accent); font-weight: 600; }
+  .views a[data-view="checks"] svg {
+    width: 26px; height: 26px; padding: 11px; box-sizing: content-box; margin-top: -24px; border-radius: 50%;
+    background: var(--accent); color: var(--accent-ink); border: 3px solid var(--bg);
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 38%, transparent);
+  }
+  .views a[data-view="checks"]:active svg { transform: scale(.95); }
+  .views a[data-view="checks"] .badge { top: -22px; left: calc(50% + 12px); }
   .views .badge { position: absolute; top: 2px; left: calc(50% + 6px); margin: 0; min-width: 19px; height: 19px; border: 2px solid var(--surface); box-sizing: content-box; }
   .views a span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   body { padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
