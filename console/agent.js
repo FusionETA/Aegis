@@ -249,7 +249,7 @@ function status() {
     }
     const schedule = cron.get(action) || null;
     return {
-      action, app: info.app || null, name: info.name || action, site: info.site || '', description: info.description || '',
+      action, app: info.app || null, appName: info.appName || info.app || null, name: info.name || action, site: info.site || '', description: info.description || '',
       steps: info.steps || [], schedule, scheduleText: schedule ? describeCron(schedule) : 'On demand',
       next: schedule && !paused ? nextRun(schedule) : null,
       ...m, retry: retryText(m), paused, running: isRunning(action), state,

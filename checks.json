@@ -2,6 +2,7 @@
   {
     "action": "clockin",
     "app": "ALTOMATEHR",
+    "appName": "AltomateHR",
     "name": "Clock in + claims check",
     "site": "hr.altomate.io",
     "description": "Logs in as the ArgusBot smoke account, clocks in, reads the approval status, then walks the new-claim form to the end and cancels.",
@@ -15,6 +16,7 @@
   {
     "action": "clockout",
     "app": "ALTOMATEHR",
+    "appName": "AltomateHR",
     "name": "Clock out",
     "site": "hr.altomate.io",
     "description": "Logs in, clocks out and reads the approval status.",
@@ -27,6 +29,7 @@
   {
     "action": "artemis/nginx",
     "app": "ARTEMIS",
+    "appName": "Artemis (AltomateHR web server)",
     "name": "Artemis nginx",
     "site": "hr.altomate.io on artemis",
     "description": "Is AltomateHR's web server up? No login and no browser.",
@@ -41,6 +44,7 @@
   {
     "action": "claims-check",
     "app": "ALTOMATEHR",
+    "appName": "AltomateHR",
     "name": "Claims check",
     "site": "hr.altomate.io",
     "description": "The read-only claims walk on its own. It also runs inside the 09:00 check.",
