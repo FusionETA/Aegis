@@ -14,17 +14,20 @@
 <div class="wrap">
   <header class="bar">
     <a class="brand" href="#checks" aria-label="Argus home"><svg viewBox="0 0 34 24" aria-hidden="true"><ellipse cx="17" cy="12" rx="16" ry="11" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.5"/><ellipse cx="17" cy="12.6" rx="9.5" ry="7" fill="var(--accent)"/><ellipse cx="17" cy="13" rx="4.6" ry="3.8" fill="var(--ink)"/><circle cx="15.4" cy="11.6" r="1.3" fill="var(--surface)"/></svg><b>Argus</b></a>
-    <nav aria-label="Views">
+    <nav class="views" aria-label="Views">
       <a href="#checks" data-view="checks">Checks</a>
-      <a href="#setup" data-view="setup">Setup</a>
+      <a href="#apps" data-view="apps">Apps</a>
+      <a href="#channels" data-view="channels">Channels</a>
       <a href="#activity" data-view="activity">Activity</a>
       <a href="#people" data-view="people" hidden>People</a>
     </nav>
-    <div class="who"><span id="who"></span><a href="#account">Account</a><button class="btn small" id="signout" type="button">Sign out</button></div>
+    <div class="who"><a href="#account" data-view="account" id="who" title="Your account"></a><button class="btn small" id="signout" type="button">Sign out</button></div>
   </header>
   <main>
     <section data-panel="checks" id="view-checks" aria-label="Checks"></section>
-    <section data-panel="setup" id="view-setup" aria-label="Setup" hidden></section>
+    <section data-panel="check" id="view-check" aria-label="Check" hidden></section>
+    <section data-panel="apps" id="view-apps" aria-label="Apps" hidden></section>
+    <section data-panel="channels" id="view-channels" aria-label="Channels" hidden></section>
     <section data-panel="activity" id="view-activity" aria-label="Activity" hidden></section>
     <section data-panel="people" id="view-people" aria-label="People" hidden></section>
     <section data-panel="account" id="view-account" aria-label="Account" hidden></section>

@@ -36,7 +36,9 @@ with this repo. Sessions on the Anthropic-cloud environment can't reach the live
 
 ## The console
 
-`https://argus.fusioneta.com.my` — sign-in for colleagues, with live check status and
+`https://argus.fusioneta.com.my` — sign-in for colleagues. Views: **Checks** (grouped by
+app; each check has its own page), **Apps** (per app: checks on/off, notifications, app
+login), **Channels**, **Activity**, **People** (admins), and your account. It has live check status and
 history (reports, failure screenshots), alert state (failing since, last alert), Run now
 (read-only checks only), pause/resume, alert destinations with a test alert, run reports
 (switch + own destinations, with a messages-per-day estimate), the alert channels and
@@ -56,8 +58,8 @@ log of every change.
   `node console/admin.js add-admin <email> "<Name>"` (also `reset`, `remove`, `list`).
 - Pausing writes `config/paused/<app>-<action>`, which `run.sh` honours. Display names
   and steps come from `checks.json`; a check missing there shows with its bare action
-  and gets no Setup card.
-- Setup writes these `.env` keys through the agent, the same ones you'd set by hand:
+  and gets no Apps page.
+- The Apps page writes these `.env` keys through the agent, the same ones you'd set by hand:
   `<APP>_NOTIFY`, `<APP>_REPORTS`, `<APP>_REPORTS_ENABLED` and the app login
   (`<APP>_URL`, `_LOGIN_URL`, `_EMAIL`, `_USERNAME`, `_PASSWORD`). Channel credentials
   (webhooks, SMTP, bot tokens) are still added on the server.
