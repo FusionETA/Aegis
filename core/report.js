@@ -304,7 +304,6 @@ export async function sendReportOnFailure(result, text, { app, quietPass = false
     console.log('\n----- REPORT -----\n' + text + '\n------------------');
     console.log('[report] all checks passed — no alert sent');
   }
-  await sendRunReport(app, true, text);
   if (prev?.status === 'fail') {
     const title = text.split('\n')[0].replace(/^\W*Argus\s*—\s*/u, '').replace(/\s*Report$/, '');
     const runs = `${prev.failedRuns} failed run${prev.failedRuns === 1 ? '' : 's'}`;
@@ -319,6 +318,7 @@ export async function sendReportOnFailure(result, text, { app, quietPass = false
       { app, subject: `[Argus] Passing again — ${title}` },
     );
   }
+  await sendRunReport(app, true, text);
   if (!suppressed()) writeState({ status: 'pass', since: prev?.status === 'pass' ? prev.since : now, lastRun: now });
 }
 
