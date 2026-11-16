@@ -219,6 +219,10 @@ Conventions:
   `sendReportOnFailure` so passing runs log one line. If it runs every few minutes,
   re-check inside the script instead of `run.sh`'s 5-minute retry (`argus:no-retry`).
   Model: `plugins/artemis/nginx.js`.
+- **Console listing:** add the check to `checks.json` (action, app prefix, appName,
+  name, site, description, steps), so the Argus console shows it properly. A check that
+  changes data also gets an `argus:changes-data` line; the console then never offers
+  "Run now" for it.
 - **Shared code:** put helpers several checks need in `plugins/<app>/lib/`. Keep `core/`
   app-agnostic, and don't change `core/` without checking that the AltomateHR jobs
   still work.

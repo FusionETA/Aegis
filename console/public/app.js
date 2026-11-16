@@ -204,6 +204,7 @@ async function loadAppCard(app) {
   try { s = await api(`/api/apps/${app}`); } catch (err) { card.innerHTML = `<p class="msg err">${esc(err.message)}</p>`; return; }
   const checks = status.checks.filter((c) => c.app === app);
   const def = status.defaultAlerts.targets.map((t) => `${t.channel}:${t.to}`).join(', ');
+  const signsIn = checks.some((c) => !c.noBrowser);   // checks without a browser never use an app login
   card.innerHTML = `
     <header><h2>${esc(appName(app))}</h2><p>${checks.map((c) => esc(c.name)).join(' · ')}</p></header>
     <div class="set-row"><span class="lbl">Checks<small>A paused check doesn't run until it's resumed.</small></span>
@@ -219,7 +220,8 @@ async function loadAppCard(app) {
         <p class="hint">Formats: bitrix:chat1234 (group chat), bitrix:57 (a person), email:name@company.com, telegram:-100…, slack, teams, googlechat, webhook.</p>
         <pre class="out" data-out="${esc(app)}" hidden></pre>
       </div></div>
-    <div class="set-row"><span class="lbl">App login<small>The test account checks sign in with. Stored on the server and never shown again.</small></span>
+    ${signsIn ? '' : '<!-- no app login: this app\'s checks don\'t sign in -->'}
+    <div class="set-row" ${signsIn ? '' : 'hidden'}><span class="lbl">App login<small>The test account checks sign in with. Stored on the server and never shown again.</small></span>
       <div class="cards">
         <div class="cred">${CRED_FIELDS.map(([f, label]) => `<span>${esc(label)}</span><span>${s.credentials[f] ? `<span class="set">✓ set</span> <button class="link-btn" type="button" data-act="cred-clear" data-app="${esc(app)}" data-field="${f}">clear</button>` : '<span class="muted">not set</span>'}</span>`).join('')}</div>
         <form class="inline-form" data-act="cred-set" data-app="${esc(app)}">

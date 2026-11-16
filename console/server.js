@@ -87,7 +87,8 @@ function throttle(ip) {
   list.push(now);
   attempts.set(ip, list);
 }
-const clientIp = (req) => (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+// Caddy appends the real client address last; earlier entries can be set by the client.
+const clientIp = (req) => (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',').at(-1).trim();
 
 const actorOf = (u) => `${u.name} <${u.email}>`;
 const link = (token) => `${PUBLIC_URL}/setup#t=${token}`;
