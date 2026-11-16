@@ -26,6 +26,12 @@ mkdir -p logs
 LOG="logs/${ACTION//\//-}.log"
 TS="$(date '+%Y-%m-%d %H:%M:%S %Z')"
 
+# Paused from the Argus console (config/paused/<app>-<action> exists): log one line, run nothing.
+if [[ -e "config/paused/${ACTION//\//-}" ]]; then
+  echo "===== ${ACTION} @ ${TS}: paused in the console, skipped =====" >> "$LOG"
+  exit 0
+fi
+
 # Overlap guard: one run per check at a time. If the previous run is still going
 # (a slow site, a retry still waiting), this run is skipped instead of piling up.
 exec 8> "/run/lock/argus-${ACTION//\//-}.lock"
