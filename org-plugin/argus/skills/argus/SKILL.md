@@ -32,7 +32,11 @@ test -d /root/argus && ls /root/self-hosted-claude/FusionETA/argus/.claude/skill
 - **What Argus is:** a scheduled, headed Playwright bot. Each check logs into an app with a
   test account and walks one journey. It is read-only unless an owner approved
   otherwise. Failures alert the destinations chosen for that check: Bitrix24,
-  WhatsApp, email, Telegram, Slack, Teams, Google Chat or a webhook. Passes only log.
+  WhatsApp, email, Telegram, Slack, Teams, Google Chat or a webhook. Passes only log,
+  unless the app has run reports switched on (every run's report to a separate list).
+- **Console:** https://argus.fusioneta.com.my shows every check's status, history,
+  reports and failure screenshots, and lets people pause checks, run read-only ones,
+  and change alert destinations, run reports and app logins. An admin invites people.
 - **Current checks:** listed in the repo's `README.md` ("Current checks").
 - **Logs:** on the droplet, in `/root/argus/logs/<app>-<action>.log` (AltomateHR:
   `/root/argus/logs/<action>.log`).

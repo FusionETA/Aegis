@@ -2,7 +2,9 @@
 
 A check alerts every destination listed in `<APP>_NOTIFY` (comma-separated) in
 `/root/argus/.env` when a run fails. Code: `core/report.js`. Check or test a setup
-with `tools/notify.js --app <app> --check | --test`.
+with `tools/notify.js --app <app> --check | --test`. The console
+(https://argus.fusioneta.com.my, Setup) edits the same list and sends test alerts, and
+its "Alert channels" card shows which channels are set up and who they send as.
 
 - **Destinations** (the `<APP>_NOTIFY` values) are not secret. Claude may add or edit that line.
 - **Credentials** (tokens, passwords, webhook URLs) are secrets. The person adds them to
@@ -24,6 +26,16 @@ with `tools/notify.js --app <app> --check | --test`.
 
 `<name>` lets one check post to several channels of the same kind, e.g.
 `slack:ops, slack:sales` → `SLACK_WEBHOOK_URL_OPS`, `SLACK_WEBHOOK_URL_SALES`.
+
+## Run reports (optional)
+
+Separate from failure alerts: with `<APP>_REPORTS_ENABLED=1`, every finished run's report,
+passed or failed, also goes to `<APP>_REPORTS` (same destination format, same
+credentials). It starts with "✅ Passed" or "❌ Failed"; failed ones carry the screenshot.
+There's no daily limit, so a check every 5 minutes sends ~288 a day: suggest a chat
+nobody needs to watch. A destination in both lists gets a failed run once (the alert).
+Switch it on and edit the list in the console (Setup → the app → Run reports), which
+shows the expected messages per weekday; test with `tools/notify.js --app <app> --reports --test`.
 
 ## Failure screenshots
 

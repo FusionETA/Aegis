@@ -57,6 +57,12 @@ git archive origin/main core tools | tar -x -C "$TMP"
 echo "== alerts:"
 "$NODE_BIN" --env-file=.env "$TMP/tools/notify.js" --app "$APP" --check \
   || die "fix the alert destinations above first (${PREFIX}NOTIFY and the channel keys in .env)"
+# Run reports (every run's report to its own list), when switched on for this app.
+if grep -qiE "^${PREFIX}REPORTS_ENABLED=(1|true|yes|on)$" .env; then
+  echo "== run reports:"
+  "$NODE_BIN" --env-file=.env "$TMP/tools/notify.js" --app "$APP" --reports --check \
+    || die "fix the run-report destinations above first (${PREFIX}REPORTS, or switch run reports off in the console)"
+fi
 
 # Dependencies changed? Then node_modules must be reinstalled after the pull.
 NPM_CI=no
