@@ -193,8 +193,31 @@ async function renderSetup() {
   if (!status) await refreshStatus();
   const apps = [...new Set(status.checks.map((c) => c.app).filter(Boolean))];
   v.innerHTML = `<div class="lead"><h1>Setup</h1><p>Changes here apply to Argus straight away and are recorded in Activity.</p></div>
-    <div class="cards">${apps.map((app) => `<section class="card" id="app-${esc(app)}"><p class="muted">Loading ${esc(appName(app))}…</p></section>`).join('')}</div>`;
+    <div class="cards"><section class="card" id="channels"><p class="muted">Loading alert channels…</p></section>
+    ${apps.map((app) => `<section class="card" id="app-${esc(app)}"><p class="muted">Loading ${esc(appName(app))}…</p></section>`).join('')}</div>`;
+  loadChannels();
   for (const app of apps) loadAppCard(app);
+}
+
+// Alert channels: who each channel sends as, and the default destination. Read-only.
+async function loadChannels() {
+  const card = $('#channels');
+  if (!card) return;
+  let data;
+  try { data = await api('/api/channels'); } catch (err) { card.innerHTML = `<p class="msg err">${esc(err.message)}</p>`; return; }
+  const pill = (s) => ({ connected: '<span class="pill pass">Connected</span>', 'set-up': '<span class="pill pass">Set up</span>', error: '<span class="pill fail">Not working</span>' }[s] || '<span class="pill idle">Needs setup</span>');
+  card.innerHTML = `
+    <header><h2>Alert channels</h2><p>Who Argus sends alerts as, per channel. Checks without their own list use the default destination. Setting up a new channel is done on the server; ask an admin.</p></header>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Channel</th><th>Status</th><th>Sends as</th><th>Default destination</th><th>Notes</th></tr></thead>
+      <tbody>${data.channels.map((c) => `<tr>
+        <td><b>${esc(c.label)}</b></td>
+        <td>${pill(c.status)}</td>
+        <td>${c.sender ? `${esc(c.sender)}${c.senderDetail ? `<br><span class="hint">${esc(c.senderDetail)}</span>` : ''}` : '<span class="muted">—</span>'}</td>
+        <td>${c.defaults?.length ? c.defaults.map((d) => `${d.name ? esc(d.name) : '<span class="muted">unknown chat</span>'} <span class="hint mono">bitrix:${esc(d.id)}</span>${d.ok ? '' : `<br><span class="hint">⚠ ${esc(d.problem)}</span>`}`).join('<br>') : '<span class="muted">—</span>'}</td>
+        <td>${[c.note, c.status === 'connected' || c.status === 'set-up' ? (c.screenshots ? 'Screenshots attached.' : 'Screenshots named, not attached.') : null, c.overriddenBy?.length ? `Own sender for: ${c.overriddenBy.join(', ')}.` : null].filter(Boolean).map(esc).join(' ') || '—'}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
 }
 
 async function loadAppCard(app) {
@@ -221,22 +244,16 @@ async function loadAppCard(app) {
         <pre class="out" data-out="${esc(app)}" hidden></pre>
       </div></div>
     ${signsIn ? '' : '<!-- no app login: this app\'s checks don\'t sign in -->'}
-    <div class="set-row" ${signsIn ? '' : 'hidden'}><span class="lbl">App login<small>The test account checks sign in with. Stored on the server and never shown again.</small></span>
-      <div class="cards">
-        <div class="cred">${CRED_FIELDS.map(([f, label]) => `<span>${esc(label)}</span><span>${s.credentials[f] ? `<span class="set">✓ set</span> <button class="link-btn" type="button" data-act="cred-clear" data-app="${esc(app)}" data-field="${f}">clear</button>` : '<span class="muted">not set</span>'}</span>`).join('')}</div>
-        <form class="inline-form" data-act="cred-set" data-app="${esc(app)}">
-          <select aria-label="Which login detail">${CRED_FIELDS.map(([f, label]) => `<option value="${f}">${esc(label)}</option>`).join('')}</select>
-          <input type="text" autocomplete="off" aria-label="New value">
-          <button class="btn" type="submit">Save</button>
-        </form>
-      </div></div>`;
-  const sel = $('form[data-act="cred-set"] select', card), inp = $('form[data-act="cred-set"] input', card);
-  const syncType = () => {
-    inp.type = sel.value === 'PASSWORD' ? 'password' : 'text';
-    inp.autocomplete = sel.value === 'PASSWORD' ? 'new-password' : 'off';
-    inp.placeholder = CRED_FIELDS.find(([f]) => f === sel.value)[2];
-  };
-  sel.addEventListener('change', syncType); syncType();
+    <div class="set-row" ${signsIn ? '' : 'hidden'}><span class="lbl">App login<small>The test account these checks sign in with. The password is stored on the server and never shown.</small></span>
+      <div class="tbl-wrap"><table class="cred-table"><tbody>${CRED_FIELDS
+        .filter(([f]) => f !== 'USERNAME' || s.credentials.USERNAME || !s.credentials.EMAIL)   // username only when an app uses one
+        .map(([f, label]) => {
+          const v = s.credentials[f];
+          const shown = f === 'PASSWORD'
+            ? (v ? '<span class="mono">••••••••</span>' : '<span class="muted">not set</span>')
+            : v ? `<span class="mono">${esc(v)}</span>` : `<span class="muted">${f === 'LOGIN_URL' ? 'not set (uses the app address)' : 'not set'}</span>`;
+          return `<tr><th scope="row">${esc(label)}</th><td>${shown}</td><td class="cred-act"><button class="btn small" type="button" data-act="cred-edit" data-app="${esc(app)}" data-field="${f}" data-has="${v ? '1' : ''}" data-value="${f === 'PASSWORD' ? '' : esc(v || '')}">${v ? (f === 'PASSWORD' ? 'Change' : 'Edit') : 'Add'}</button></td></tr>`;
+        }).join('')}</tbody></table></div></div>`;
 }
 
 // ---------- Activity ----------
@@ -343,8 +360,25 @@ document.addEventListener('click', async (e) => {
       out.textContent = r.output.join('\n');
       el.disabled = false;
     }
+    if (act === 'cred-edit') {
+      // Turn this row into a small form; the password box always starts empty.
+      const row = el.closest('tr'), f = el.dataset.field, app = el.dataset.app;
+      const [, label, ph] = CRED_FIELDS.find(([k]) => k === f);
+      const type = f === 'PASSWORD' ? 'password' : f.endsWith('URL') ? 'url' : f === 'EMAIL' ? 'email' : 'text';
+      row.cells[1].innerHTML = `<form class="inline-form" data-act="cred-save" data-app="${esc(app)}" data-field="${f}">
+        <input type="${type}" autocomplete="${f === 'PASSWORD' ? 'new-password' : 'off'}" placeholder="${esc(ph)}" aria-label="${esc(label)}">
+        <button class="btn small primary" type="submit">Save</button>
+        <button class="btn small" type="button" data-act="cred-cancel" data-app="${esc(app)}">Cancel</button>
+        ${el.dataset.has ? `<button class="btn small danger" type="button" data-act="cred-clear" data-app="${esc(app)}" data-field="${f}">Remove</button>` : ''}
+      </form>`;
+      row.cells[2].innerHTML = '';
+      const input = $('input', row.cells[1]);
+      input.value = el.dataset.value || '';
+      input.focus();
+    }
+    if (act === 'cred-cancel') loadAppCard(el.dataset.app);
     if (act === 'cred-clear') {
-      confirmClick(el, 'click again to clear', async () => {
+      confirmClick(el, 'Click again to remove', async () => {
         await api(`/api/apps/${el.dataset.app}/login`, { method: 'POST', body: { field: el.dataset.field, value: null } });
         toast('Cleared.'); loadAppCard(el.dataset.app);
       });
@@ -402,11 +436,10 @@ document.addEventListener('submit', async (e) => {
       toast(r.warnings?.length ? `Added, but: ${r.warnings.join(' ')}` : 'Added. Use "Send test alert" to check it arrives.');
       await refreshStatus(); loadAppCard(f.dataset.app);
     }
-    if (f.dataset.act === 'cred-set') {
-      const field = $('select', f).value, input = $('input', f);
+    if (f.dataset.act === 'cred-save') {
+      const input = $('input', f);
       if (!input.value) return toast('Type a value first.');
-      await api(`/api/apps/${f.dataset.app}/login`, { method: 'POST', body: { field, value: input.value } });
-      input.value = '';
+      await api(`/api/apps/${f.dataset.app}/login`, { method: 'POST', body: { field: f.dataset.field, value: input.value } });
       toast('Saved on the server.'); loadAppCard(f.dataset.app);
     }
     if (f.id === 'invite') {
