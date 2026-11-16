@@ -237,3 +237,9 @@ input[type="text"], input[type="email"], input[type="password"], input[type="url
   .who { margin-left: 0; width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* settings additions: channel set-up forms, the Retire section, the schedule editor */
+h2.sub { font-size: 16px; margin-top: 6px; }
+.chan-form { padding-top: 12px; border-top: 1px solid var(--line); }
+.side-sec.retire { border-bottom: 0; padding-bottom: 0; padding-top: 14px; border-top: 1px solid var(--line); }
+.stat small .link-btn { font-size: inherit; }
