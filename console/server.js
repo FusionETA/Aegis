@@ -197,6 +197,7 @@ async function api(req, res, url, user) {
       return send(res, 200, r);
     }
   }
+  if (p === '/api/channels' && m === 'GET') return send(res, 200, await agent('channels', {}, actor));
   if (p === '/api/audit' && m === 'GET') return send(res, 200, store.recentAudit(300));
 
   // --- people (admins)

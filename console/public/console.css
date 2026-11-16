@@ -153,6 +153,10 @@ input[type="text"], input[type="email"], input[type="password"], input[type="url
 .msg.err { color: var(--fail); background: var(--fail-bg); }
 .msg.ok { color: var(--pass); background: var(--pass-bg); }
 .msg.warn { color: var(--warn); background: var(--warn-bg); }
+.cred-table th { text-transform: none; letter-spacing: 0; font-size: 14px; font-weight: 500; color: var(--ink); background: none; width: 34%; white-space: normal; }
+.cred-table td { vertical-align: middle; overflow-wrap: anywhere; }
+.cred-table td.cred-act { width: 1%; text-align: right; white-space: nowrap; }
+.cred-table .inline-form input { flex: 1 1 200px; }
 .cred { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 6px 14px; font-size: 14px; }
 .cred .set { color: var(--pass); }
 .out { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.6 var(--font-mono); background: var(--sunk); border-radius: 8px; padding: 10px 12px; }

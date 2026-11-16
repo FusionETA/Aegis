@@ -261,9 +261,78 @@ function status() {
   return { generatedAt: new Date().toISOString(), checks, apps, defaultAlerts: alertStatus(undefined) };
 }
 
+// ---------- alert channels ----------
+// Who each alert channel sends as, for the console's "Alert channels" section. Reads
+// the settings and asks Bitrix / Telegram who the sender is (cached 5 minutes). Never
+// returns a secret: no webhook URLs, tokens or passwords.
+const CHANNEL_KEYS = {
+  bitrix: ['BITRIX_WEBHOOK_URL'], email: ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASSWORD'], telegram: ['TELEGRAM_BOT_TOKEN'],
+  slack: ['SLACK_WEBHOOK_URL'], teams: ['TEAMS_WEBHOOK_URL'], googlechat: ['GOOGLECHAT_WEBHOOK_URL'],
+  webhook: ['WEBHOOK_URL'], whatsapp: ['WAZZUP_API_KEY', 'WAZZUP_CHANNEL_ID'],
+};
+let channelCache = { key: '', at: 0, data: null };
+const getJson = (url) => fetch(url, { signal: AbortSignal.timeout(8000) }).then((r) => r.json()).catch(() => ({}));
+
+async function channels() {
+  const env = readEnv();
+  const key = JSON.stringify(Object.values(CHANNEL_KEYS).flat().map((k) => env[k] || ''));
+  if (channelCache.key === key && Date.now() - channelCache.at < 5 * 60_000) return channelCache.data;
+  const has = (k) => !!(env[k] || '').trim();
+  const named = (prefix) => Object.keys(env).filter((k) => k.startsWith(`${prefix}_`) && env[k]).map((k) => k.slice(prefix.length + 1).toLowerCase());
+  const reg = registry();
+  const overrides = (ch) => [...new Set(reg.filter((c) => c.app && CHANNEL_KEYS[ch].some((k) => env[`${c.app}_${k}`])).map((c) => c.appName || c.app))];
+  const list = [];
+
+  // Bitrix24: the webhook's user is the sender; BITRIX_DIALOG_ID is the default destination.
+  const hook = (env.BITRIX_WEBHOOK_URL || '').trim().replace(/\/+$/, '');
+  if (hook) {
+    const [profile, scope] = await Promise.all([getJson(`${hook}/profile.json`), getJson(`${hook}/scope.json`)]);
+    const defaults = [];
+    for (const id of (env.BITRIX_DIALOG_ID || '').split(',').map((s) => s.trim()).filter(Boolean)) {
+      const d = await getJson(`${hook}/im.dialog.get.json?DIALOG_ID=${encodeURIComponent(id)}`);
+      // Only blame chat membership when the webhook itself works.
+      const problem = d.result ? null : profile.result ? 'the sender isn\'t a member of this chat' : null;
+      defaults.push({ id, name: d.result?.name || null, ok: !!d.result || !profile.result, problem });
+    }
+    const p = profile.result;
+    list.push({
+      channel: 'bitrix', label: 'Bitrix24', status: p ? 'connected' : 'error',
+      sender: p ? `${p.NAME || ''} ${p.LAST_NAME || ''}`.trim() || `User ${p.ID}` : null, senderDetail: p ? `Bitrix user ${p.ID}` : null,
+      defaults, screenshots: Array.isArray(scope.result) && scope.result.includes('disk'),
+      note: p ? null : 'Bitrix didn\'t accept the webhook. It may have been deleted or regenerated.',
+    });
+  } else list.push({ channel: 'bitrix', label: 'Bitrix24', status: 'needs-setup', note: 'Needs an inbound webhook with the im and disk permissions.' });
+
+  if (has('SMTP_HOST') && has('SMTP_USER') && has('SMTP_PASSWORD')) {
+    list.push({ channel: 'email', label: 'Email', status: 'set-up', sender: env.SMTP_FROM || env.SMTP_USER, senderDetail: `via ${env.SMTP_HOST}:${env.SMTP_PORT || 587}`, screenshots: true, note: 'Not verified until a test alert is sent.' });
+  } else list.push({ channel: 'email', label: 'Email', status: 'needs-setup', note: 'Needs a sender mailbox\'s SMTP settings on the server.' });
+
+  if (has('TELEGRAM_BOT_TOKEN')) {
+    const me = await getJson(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN.trim()}/getMe`);
+    list.push({ channel: 'telegram', label: 'Telegram', status: me.ok ? 'connected' : 'error', sender: me.ok ? `@${me.result.username}` : null, senderDetail: me.ok ? me.result.first_name : null, screenshots: true, note: me.ok ? null : 'Telegram didn\'t accept the bot token.' });
+  } else list.push({ channel: 'telegram', label: 'Telegram', status: 'needs-setup', note: 'Needs a bot token from @BotFather.' });
+
+  for (const [ch, label, prefix] of [['slack', 'Slack', 'SLACK_WEBHOOK_URL'], ['teams', 'Microsoft Teams', 'TEAMS_WEBHOOK_URL'], ['googlechat', 'Google Chat', 'GOOGLECHAT_WEBHOOK_URL'], ['webhook', 'Generic webhook', 'WEBHOOK_URL']]) {
+    const names = named(prefix);
+    if (has(prefix) || names.length) {
+      list.push({ channel: ch, label, status: 'set-up', sender: 'Incoming webhook', senderDetail: [has(prefix) ? 'default' : null, ...names.map((n) => `${ch}:${n}`)].filter(Boolean).join(', '), screenshots: false, note: 'Posts as whatever the webhook was created for. Not verified until a test alert is sent.' });
+    } else list.push({ channel: ch, label, status: 'needs-setup', note: ch === 'webhook' ? 'Needs a URL to POST alerts to (n8n, Zapier, an in-house app).' : `Needs an incoming webhook URL from ${label}.` });
+  }
+
+  if (has('WAZZUP_API_KEY') && has('WAZZUP_CHANNEL_ID')) {
+    list.push({ channel: 'whatsapp', label: 'WhatsApp (Wazzup)', status: 'set-up', sender: 'Shared Wazzup account', screenshots: false, note: 'Not verified until a test alert is sent.' });
+  } else list.push({ channel: 'whatsapp', label: 'WhatsApp (Wazzup)', status: 'needs-setup', note: 'Per app: an app that wants WhatsApp adds its own Wazzup key and channel ID.' });
+
+  for (const c of list) c.overriddenBy = overrides(c.channel);
+  channelCache = { key, at: Date.now(), data: { channels: list } };
+  return channelCache.data;
+}
+
 // ---------- operations ----------
 const OPS = {
   status: () => status(),
+
+  channels: () => channels(),
 
   report: ({ action, start }) => {
     requireAction(action);
@@ -306,7 +375,8 @@ const OPS = {
   appSettings: ({ app }) => {
     requireApp(app);
     const env = readEnv();
-    const credentials = Object.fromEntries(CRED_FIELDS.map((f) => [f, !!env[`${app}_${f}`]]));
+    // Addresses and the sign-in name are shown in the console; the password is only ever reported as set or not.
+    const credentials = Object.fromEntries(CRED_FIELDS.map((f) => [f, f === 'PASSWORD' ? !!env[`${app}_${f}`] : env[`${app}_${f}`] || null]));
     const notify = env[`${app}_NOTIFY`] ? env[`${app}_NOTIFY`].split(',').map((s) => s.trim()).filter(Boolean) : [];
     return { app, notify, alerts: alertStatus(app), credentials };
   },
