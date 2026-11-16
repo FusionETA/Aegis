@@ -434,7 +434,7 @@ async function channels() {
 
   if (has('SMTP_HOST') && has('SMTP_USER') && has('SMTP_PASSWORD')) {
     list.push({ channel: 'email', label: 'Email', status: 'set-up', sender: env.SMTP_FROM || env.SMTP_USER, senderDetail: `via ${env.SMTP_HOST}:${env.SMTP_PORT || 587}`, screenshots: true, note: 'Not verified until a test alert is sent.' });
-  } else list.push({ channel: 'email', label: 'Email', status: 'needs-setup', note: 'Needs a sender mailbox\'s SMTP settings on the server.' });
+  } else list.push({ channel: 'email', label: 'Email', status: 'needs-setup', note: 'Needs a sender mailbox\'s SMTP settings (server, port, login).' });
 
   if (has('TELEGRAM_BOT_TOKEN')) {
     const me = await getJson(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN.trim()}/getMe`);
