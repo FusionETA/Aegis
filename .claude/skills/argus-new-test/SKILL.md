@@ -118,7 +118,7 @@ box themselves, over SSH or the DigitalOcean droplet console:
 `<APP>_NOTIFY=bitrix:chat1234, email:ops@fusioneta.com, slack:ops`.
 Once the check is in `checks.json` and deployed, the person can also manage this list,
 run reports and the app login themselves in the console (https://argus.fusioneta.com.my,
-Setup), including the password, so it never goes through chat or SSH.
+Apps), including the password, so it never goes through chat or SSH.
 `notifications.md` has the exact format for each channel. Destinations aren't secret,
 so you may add this line yourself. Check it isn't already there, then append it:
 `printf '<APP>_NOTIFY=...\n' >> /root/argus/.env`.

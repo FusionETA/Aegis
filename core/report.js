@@ -36,7 +36,7 @@
 // RUN REPORTS: optional, per app, separate from alerts. With MY_APP_REPORTS_ENABLED=1,
 // every finished run (passed or failed, after any retry) also sends its report to
 // MY_APP_REPORTS (same destination format). Not limited per day; a destination that
-// just got this run's failure alert isn't sent it twice. Set in the console's Setup.
+// just got this run's failure alert isn't sent it twice. Set in the console's Apps page.
 //
 // ARGUS_NO_NOTIFY=1 suppresses every send (use it for test runs); such runs also
 // leave the stored state alone.
