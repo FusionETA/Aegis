@@ -20,6 +20,7 @@ const NODE = process.env.ARGUS_NODE || '/opt/node24/bin/node';
 const CONSOLE_URL = (process.env.CONSOLE_URL || 'https://argus.fusioneta.com.my').replace(/\/$/, '');
 const ENV_FILE = path.join(HOME, '.env');
 const CRED_FIELDS = ['URL', 'LOGIN_URL', 'EMAIL', 'USERNAME', 'PASSWORD'];
+const CRONTAB_FILE = process.env.ARGUS_CRONTAB || '';   // tests only: a file standing in for root's crontab
 
 const requireHome = createRequire(path.join(HOME, 'package.json'));
 const dotenv = requireHome('dotenv');
@@ -89,7 +90,9 @@ function registry() {
   try { return JSON.parse(fs.readFileSync(path.join(HOME, 'checks.json'), 'utf8')); } catch { return []; }
 }
 
-const crontab = () => spawnSync('crontab', ['-l'], { encoding: 'utf8' }).stdout || '';
+const crontab = () => (CRONTAB_FILE
+  ? (fs.existsSync(CRONTAB_FILE) ? fs.readFileSync(CRONTAB_FILE, 'utf8') : '')
+  : spawnSync('crontab', ['-l'], { encoding: 'utf8' }).stdout || '');
 function cronEntries() {
   const entries = [];
   for (const line of crontab().split('\n')) {
@@ -99,8 +102,19 @@ function cronEntries() {
   return entries;
 }
 
+// Retired checks (config/retired/<app>-<action>): no schedule, kept with their history.
+const retiredFile = (action) => path.join(HOME, 'config', 'retired', fileName(action));
+function readRetired(action) {
+  try { return JSON.parse(fs.readFileSync(retiredFile(action), 'utf8')); } catch { return null; }
+}
+function retiredActions() {
+  const dir = path.join(HOME, 'config', 'retired');
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir).map((f) => { try { return JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')).action; } catch { return null; } }).filter(Boolean);
+}
+
 function knownActions() {
-  const set = new Set([...registry().map((c) => c.action), ...cronEntries().map((e) => e.action)]);
+  const set = new Set([...registry().map((c) => c.action), ...cronEntries().map((e) => e.action), ...retiredActions()]);
   return [...set].filter(validAction);
 }
 function requireAction(a) {
@@ -161,6 +175,68 @@ function nextRun(expr, from = new Date()) {
     if (M.has(t.getMinutes()) && H.has(t.getHours()) && D.has(t.getDate()) && MO.has(t.getMonth() + 1) && W.has(t.getDay())) return t.toISOString();
   }
   return null;
+}
+
+// --- changing the crontab (one check's line at a time)
+const CRON_LIMITS = [[0, 59], [0, 23], [1, 31], [1, 12], [0, 7]];
+// Returns the normalised expression, or null if it isn't five valid cron fields.
+function validCron(expr) {
+  const f = String(expr || '').trim().split(/\s+/);
+  if (f.length !== 5) return null;
+  for (let i = 0; i < 5; i++) {
+    const [lo, hi] = CRON_LIMITS[i];
+    for (const part of f[i].split(',')) {
+      const m = part.match(/^(?:\*|(\d+)(?:-(\d+))?)(?:\/(\d+))?$/);
+      if (!m) return null;
+      const a = m[1] === undefined ? lo : Number(m[1]);
+      const b = m[2] !== undefined ? Number(m[2]) : m[1] === undefined || m[3] !== undefined ? hi : a;
+      if (a < lo || b > hi || a > b || (m[3] !== undefined && (Number(m[3]) < 1 || Number(m[3]) > hi))) return null;
+    }
+  }
+  return f.join(' ');
+}
+// Shortest gap between two runs on the same day, in minutes.
+function minGap(expr) {
+  const [mi, h] = expr.split(' ');
+  const times = [...cronField(h, 0, 23)].flatMap((hh) => [...cronField(mi, 0, 59)].map((mm) => hh * 60 + mm)).sort((a, b) => a - b);
+  if (times.length < 2) return Infinity;
+  let gap = 1440 - times.at(-1) + times[0];
+  for (let i = 1; i < times.length; i++) gap = Math.min(gap, times[i] - times[i - 1]);
+  return gap;
+}
+
+// Saves the current crontab to config/crontab-backups/ (last 30 kept), installs `text`
+// and reads it back.
+function installCrontab(text) {
+  const dir = path.join(HOME, 'config', 'crontab-backups');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, `${new Date().toISOString().replace(/[:.]/g, '-')}.txt`), crontab(), { mode: 0o600 });
+  for (const old of fs.readdirSync(dir).sort().slice(0, -30)) fs.unlinkSync(path.join(dir, old));
+  if (CRONTAB_FILE) fs.writeFileSync(CRONTAB_FILE, text);
+  else {
+    const r = spawnSync('crontab', ['-'], { input: text, encoding: 'utf8' });
+    if (r.status !== 0) throw new Error(`crontab refused the new schedule: ${r.stderr}`);
+  }
+  if (crontab() !== text) throw new Error('The crontab did not save as written.');
+}
+
+const CRON_LINE = /^(\s*)([^#\s]\S*\s+\S+\s+\S+\s+\S+\s+\S+)(\s+\S*\/run\.sh\s+)(\S+)(\s*)$/;
+// Sets (or with null, removes) one check's cron line. Every other line stays as it is.
+function writeSchedule(action, schedule) {
+  const lines = crontab().replace(/\n$/, '').split('\n');
+  const idx = lines.flatMap((l, i) => (l.match(CRON_LINE)?.[4] === action ? [i] : []));
+  if (idx.length > 1) refuse('This check has more than one line in the crontab. Ask an admin to tidy it up on the server.');
+  const i = idx[0];
+  if (schedule === null) {
+    if (i === undefined) return;
+    lines.splice(i, 1);
+    if (i > 0 && lines[i - 1].startsWith(`# ${action} `)) lines.splice(i - 1, 1);   // its "added by" comment
+  } else if (i !== undefined) {
+    lines[i] = lines[i].replace(CRON_LINE, (all, a, old, b, act, e) => `${a}${schedule}${b}${act}${e}`);
+  } else {
+    lines.push(`# ${action} — scheduled from the Argus console. Log: ${path.join(HOME, 'logs', `${fileName(action)}.log`)}`, `${schedule} ${path.join(HOME, 'run.sh')} ${action}`);
+  }
+  installCrontab(lines.join('\n') + '\n');
 }
 
 // --- log parsing: blocks between "===== <action> @ <ts> =====" and "... exit N @ <time> ====="
@@ -271,10 +347,11 @@ function status() {
       if (r.exit) daily[d].failed++;
     }
     const schedule = cron.get(action) || null;
+    const retired = readRetired(action);
     return {
       action, app: info.app || null, appName: info.appName || info.app || null, name: info.name || action, site: info.site || '', description: info.description || '',
       steps: info.steps || [], schedule, scheduleText: schedule ? describeCron(schedule) : 'On demand',
-      next: schedule && !paused ? nextRun(schedule) : null,
+      next: schedule && !paused ? nextRun(schedule) : null, retired,
       ...m, retry: retryText(m, delay), paused, running: isRunning(action), state,
       runs: runs.slice(-40).reverse(), daily: Object.values(daily).slice(-14).reverse(),
       totalRuns: runs.filter((r) => !r.skipped).length, failedRuns: runs.filter((r) => r.exit).length,
@@ -293,6 +370,35 @@ const CHANNEL_KEYS = {
   slack: ['SLACK_WEBHOOK_URL'], teams: ['TEAMS_WEBHOOK_URL'], googlechat: ['GOOGLECHAT_WEBHOOK_URL'],
   webhook: ['WEBHOOK_URL'], whatsapp: ['WAZZUP_API_KEY', 'WAZZUP_CHANNEL_ID'],
 };
+// What admins can set per channel in the console: [key, label, secret]. Secrets are never
+// sent back, only whether they're set and a harmless hint (the webhook's host, the bot's ID).
+// WhatsApp has no shared account (per app only), so it isn't here.
+const CHANNEL_FIELDS = {
+  bitrix: [['BITRIX_WEBHOOK_URL', 'Inbound webhook URL', true], ['BITRIX_DIALOG_ID', 'Default chat(s)', false]],
+  email: [['SMTP_HOST', 'SMTP server', false], ['SMTP_PORT', 'Port', false], ['SMTP_USER', 'Username', false], ['SMTP_PASSWORD', 'Password', true], ['SMTP_FROM', 'Send as (From address)', false]],
+  telegram: [['TELEGRAM_BOT_TOKEN', 'Bot token', true]],
+  slack: [['SLACK_WEBHOOK_URL', 'Incoming webhook URL', true]],
+  teams: [['TEAMS_WEBHOOK_URL', 'Incoming webhook URL', true]],
+  googlechat: [['GOOGLECHAT_WEBHOOK_URL', 'Incoming webhook URL', true]],
+  webhook: [['WEBHOOK_URL', 'URL to POST alerts to', true]],
+};
+function secretHint(key, v) {
+  if (!v) return null;
+  if (/^https?:\/\//.test(v)) { try { return `${new URL(v).host}/…`; } catch { return null; } }
+  if (key === 'TELEGRAM_BOT_TOKEN') return `${v.split(':')[0]}:…`;
+  return null;
+}
+function fieldProblem(key, v) {
+  if (key === 'BITRIX_WEBHOOK_URL') return /^https:\/\/[^\s/]+\/rest\/\d+\/[A-Za-z0-9]+\/?$/.test(v) ? null : 'A Bitrix webhook looks like https://<portal>/rest/<user ID>/<code>/';
+  if (key.endsWith('WEBHOOK_URL') || key === 'WEBHOOK_URL') return /^https:\/\/[^\s/]+\/\S*$/.test(v) ? null : 'Webhook URLs start with https://';
+  if (key === 'BITRIX_DIALOG_ID') return v.split(',').every((d) => /^(chat\d+|\d+)$/.test(d.trim())) ? null : 'Default chats are chat IDs like chat6356 (or a person\'s user number), separated by commas.';
+  if (key === 'SMTP_PORT') return /^\d{2,5}$/.test(v) ? null : 'The port is a number, usually 587 (or 465).';
+  if (key === 'SMTP_HOST') return /^[A-Za-z0-9.-]+$/.test(v) ? null : 'The SMTP server is a host name like smtp.office365.com.';
+  if (key === 'SMTP_FROM' && !v.includes('@')) return 'The From address needs an email address, e.g. Argus <argus@fusioneta.com>.';
+  if (key === 'TELEGRAM_BOT_TOKEN') return /^\d+:[\w-]{30,}$/.test(v) ? null : 'A bot token from @BotFather looks like 123456789:AA…';
+  return null;
+}
+
 let channelCache = { key: '', at: 0, data: null };
 const getJson = (url) => fetch(url, { signal: AbortSignal.timeout(8000) }).then((r) => r.json()).catch(() => ({}));
 
@@ -346,7 +452,12 @@ async function channels() {
     list.push({ channel: 'whatsapp', label: 'WhatsApp (Wazzup)', status: 'set-up', sender: 'Shared Wazzup account', screenshots: false, note: 'Not verified until a test alert is sent.' });
   } else list.push({ channel: 'whatsapp', label: 'WhatsApp (Wazzup)', status: 'needs-setup', note: 'Per app: an app that wants WhatsApp adds its own Wazzup key and channel ID.' });
 
-  for (const c of list) c.overriddenBy = overrides(c.channel);
+  for (const c of list) {
+    c.overriddenBy = overrides(c.channel);
+    c.fields = (CHANNEL_FIELDS[c.channel] || []).map(([k, label, secret]) => ({
+      key: k, label, secret, set: has(k), value: secret ? null : env[k] || null, hint: secret ? secretHint(k, env[k]) : null,
+    }));
+  }
   channelCache = { key, at: Date.now(), data: { channels: list } };
   return channelCache.data;
 }
@@ -385,6 +496,7 @@ const OPS = {
   runNow: ({ action }, actor) => {
     requireAction(action);
     if (markers(action).changesData) refuse('This check changes data, so it can only run on its schedule.');
+    if (readRetired(action)) refuse('This check is retired. Bring it back first.');
     if (fs.existsSync(path.join(HOME, 'config', 'paused', fileName(action)))) refuse('This check is paused. Resume it first.');
     if (isRunning(action)) refuse('This check is already running.');
     const child = spawn(path.join(HOME, 'run.sh'), [action], {
@@ -457,6 +569,81 @@ const OPS = {
     writeEnvKey(`${app}_${field}`, value);
     logChange(actor, value === null ? 'clear-login-field' : 'set-login-field', `${app}_${field}`);
     return { set: value !== null };
+  },
+
+  setSchedule: ({ action, schedule, asAdmin }, actor) => {
+    requireAction(action);
+    if (markers(action).changesData && !asAdmin) refuse('This check changes data, so only an admin can change when it runs.');
+    if (readRetired(action)) refuse('This check is retired. Bring it back first.');
+    let expr = null;
+    if (schedule !== null) {
+      expr = validCron(schedule);
+      if (!expr) refuse('That schedule isn\'t valid. A custom schedule is five cron fields, e.g. "15 9 * * 1-5" for weekdays at 09:15.');
+      if (minGap(expr) < 5) refuse('Runs must be at least 5 minutes apart.');
+    }
+    writeSchedule(action, expr);
+    logChange(actor, expr ? 'set-schedule' : 'remove-schedule', action, expr || '');
+    return { schedule: expr, text: expr ? describeCron(expr) : 'On demand' };
+  },
+
+  // Retiring removes the check's schedule and remembers it, so bringing it back restores it.
+  setRetired: ({ action, retired, asAdmin }, actor) => {
+    requireAction(action);
+    if (!asAdmin) refuse('Only admins can retire a check or bring one back.');
+    const f = retiredFile(action);
+    if (retired) {
+      if (fs.existsSync(f)) refuse('It\'s already retired.');
+      const schedule = cronEntries().find((e) => e.action === action)?.schedule || null;
+      if (schedule) writeSchedule(action, null);
+      fs.mkdirSync(path.dirname(f), { recursive: true });
+      fs.writeFileSync(f, JSON.stringify({ action, by: actor, at: new Date().toISOString(), schedule }));
+    } else {
+      const was = readRetired(action);
+      if (!was) refuse('It isn\'t retired.');
+      if (was.schedule && !cronEntries().some((e) => e.action === action)) writeSchedule(action, was.schedule);
+      fs.unlinkSync(f);
+    }
+    logChange(actor, retired ? 'retire' : 'bring-back', action);
+    return { retired: !!retired };
+  },
+
+  setChannel: ({ channel, values, asAdmin }, actor) => {
+    if (!asAdmin) refuse('Only admins can change channel settings.');
+    const fields = CHANNEL_FIELDS[channel] || refuse('Unknown channel.');
+    if (!values || typeof values !== 'object') refuse('Nothing to change.');
+    const changes = Object.entries(values);
+    if (!changes.length) refuse('Nothing to change.');
+    for (const [k, v] of changes) {
+      if (!fields.some(([key]) => key === k)) refuse('Unknown setting.');
+      if (v === null) { if (k === 'BITRIX_DIALOG_ID') refuse('Argus always needs a default chat. Change it instead of removing it.'); continue; }
+      if (typeof v !== 'string' || !v.trim() || v.length > 500 || /[\n\r\0]/.test(v)) refuse('Values must be 1–500 characters on one line.');
+      const problem = fieldProblem(k, v.trim());
+      if (problem) refuse(problem);
+    }
+    for (const [k, v] of changes) writeEnvKey(k, v === null ? null : v.trim());
+    channelCache.at = 0;
+    const shown = changes.map(([k, v]) => (k === 'BITRIX_DIALOG_ID' ? `${k}=${v}` : v === null ? `${k} removed` : k));
+    logChange(actor, 'set-channel', channel, shown.join(', '));
+    return { saved: changes.map(([k]) => k) };
+  },
+
+  // A test message through one channel: Bitrix to a chat (default chat if none given),
+  // email and Telegram to the address or chat given, webhook channels to their webhook.
+  testChannel: ({ channel, to, asAdmin }, actor) => {
+    if (!asAdmin) refuse('Only admins can test channels.');
+    if (!CHANNEL_FIELDS[channel]) refuse('Unknown channel.');
+    to = String(to || '').trim();
+    if (to && !/^[\w@.+:-]{1,120}$/.test(to)) refuse('That destination doesn\'t look right.');
+    let list;
+    if (channel === 'bitrix') list = to ? `bitrix:${to}` : (readEnv().BITRIX_DIALOG_ID || '').split(',').map((d) => d.trim()).filter(Boolean).map((d) => `bitrix:${d}`).join(',');
+    else if (channel === 'email' || channel === 'telegram') list = to ? `${channel}:${to}` : refuse(channel === 'email' ? 'Enter an email address to send the test to.' : 'Enter a Telegram chat ID to send the test to.');
+    else list = channel;
+    if (!list) refuse('There\'s no default chat to send to.');
+    const out = spawnSync(NODE, [`--env-file=${ENV_FILE}`, path.join(HOME, 'tools', 'notify.js'), '--to', list, '--test'], {
+      cwd: HOME, encoding: 'utf8', timeout: 90_000, env: { ...BASE_ENV },
+    });
+    logChange(actor, 'test-channel', channel, list);
+    return { output: `${out.stdout || ''}${out.stderr || ''}`.trim().split('\n').slice(-30) };
   },
 
   testAlert: ({ app, reports }, actor) => {
