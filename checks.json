@@ -1,0 +1,58 @@
+[
+  {
+    "action": "clockin",
+    "app": "ALTOMATEHR",
+    "appName": "AltomateHR",
+    "name": "Clock in + claims check",
+    "site": "hr.altomate.io",
+    "description": "Logs in as the ArgusBot smoke account, clocks in, reads the approval status, then walks the new-claim form to the end and cancels.",
+    "steps": [
+      "Log in",
+      "Clock in",
+      "Wait 90 s and read the approval status",
+      "Open Claims and walk the new-claim form to the end, then Cancel (nothing submitted)"
+    ]
+  },
+  {
+    "action": "clockout",
+    "app": "ALTOMATEHR",
+    "appName": "AltomateHR",
+    "name": "Clock out",
+    "site": "hr.altomate.io",
+    "description": "Logs in, clocks out and reads the approval status.",
+    "steps": [
+      "Log in",
+      "Clock out and confirm",
+      "Wait 90 s and read the approval status"
+    ]
+  },
+  {
+    "action": "artemis/nginx",
+    "app": "ARTEMIS",
+    "appName": "Artemis (AltomateHR web server)",
+    "name": "Artemis nginx",
+    "site": "hr.altomate.io on artemis",
+    "description": "Is AltomateHR's web server up? No login and no browser.",
+    "steps": [
+      "Public site https://hr.altomate.io/ loads (200 from nginx)",
+      "The app behind nginx answers its heartbeat (normally 405)",
+      "nginx answers directly on artemis over the private network",
+      "artemis's SSH port answers (connect only, never logs in)",
+      "HTTPS certificate has at least 14 days left"
+    ]
+  },
+  {
+    "action": "claims-check",
+    "app": "ALTOMATEHR",
+    "appName": "AltomateHR",
+    "name": "Claims check",
+    "site": "hr.altomate.io",
+    "description": "The read-only claims walk on its own. It also runs inside the 09:00 check.",
+    "steps": [
+      "Log in",
+      "Open Claims (list and search box)",
+      "Walk the new-claim form to the end",
+      "Confirm “Submit claim” is there, then Cancel"
+    ]
+  }
+]

@@ -32,6 +32,27 @@ whole flow: intake, read-only investigation, plan, script, test, deploy.
 Work on Argus in a Claude Code session on the self-hosted **FusionAI** environment
 with this repo. Sessions on the Anthropic-cloud environment can't reach the live box.
 
+## The console
+
+`https://argus.fusioneta.com.my` — sign-in for colleagues, with live check status and
+history (reports, failure screenshots), Run now (read-only checks only), pause/resume,
+alert destinations with a test alert, write-only app logins, People (admins) and an
+Activity log of every change.
+
+- `console/server.js` — the web app, as the unprivileged user `argus-web` on
+  127.0.0.1:3200 behind Caddy. It owns accounts and sessions (`console/store.js`, data
+  in `/var/lib/argus-console`) and can't read `/root`.
+- `console/agent.js` — a small root service that does everything that touches Argus,
+  from a fixed list of validated operations on a Unix socket only `argus-web` can
+  open. Its own record of changes: `logs/console-changes.log`.
+- Accounts: an admin invites people from the People page; each gets a one-time link
+  (24 h) to choose a password, sent by Bitrix DM when their Bitrix user ID is known.
+  Sessions end after 12 h, or 4 h idle; 5 wrong passwords lock an account for 15 min.
+- Install or update: `console/install.sh`. First admin, or when everyone is locked out:
+  `node console/admin.js add-admin <email> "<Name>"` (also `reset`, `remove`, `list`).
+- Pausing writes `config/paused/<app>-<action>`, which `run.sh` honours. Display names
+  and steps come from `checks.json`.
+
 ## The live box
 
 - **Live checkout:** `/root/argus`, on `main`. Cron runs it, so don't edit it by hand;

@@ -39,7 +39,8 @@ try {
   console.error(`[claims-check] run failed: ${err.message}`);
 } finally {
   await closeBrowser(browser, result);
-  await sendReportOnFailure(result, buildReport(result));
+  // Alerts: ALTOMATEHR_NOTIFY if set, otherwise the default Bitrix chat.
+  await sendReportOnFailure(result, buildReport(result), { app: 'ALTOMATEHR' });
 }
 
 function buildReport(r) {

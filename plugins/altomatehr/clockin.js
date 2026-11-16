@@ -4,6 +4,7 @@ import { login } from './lib/login.js';
 import { sendReportOnFailure } from '../../core/report.js';
 import { nowMYT } from '../../core/time.js';
 
+// argus:changes-data — the console never offers "Run now" for this check.
 // argus:no-retry — this check clocks the smoke account in on PROD; run.sh must
 // never repeat it after a failure (a half-finished tap could double-act).
 import { navCheck } from './lib/claims-actions.js';
@@ -126,7 +127,8 @@ try {
   console.error(`[clockin] run failed: ${err.message}`);
 } finally {
   await closeBrowser(browser, result);
-  await sendReportOnFailure(result, buildReport(result));
+  // Alerts: ALTOMATEHR_NOTIFY if set, otherwise the default Bitrix chat.
+  await sendReportOnFailure(result, buildReport(result), { app: 'ALTOMATEHR' });
 }
 
 function buildReport(r) {
