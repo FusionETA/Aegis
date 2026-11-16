@@ -54,6 +54,8 @@ log of every change.
 - Accounts: an admin invites people from the People page; each gets a one-time link
   (24 h) to choose a password, sent by Bitrix DM when their Bitrix user ID is known.
   Sessions end after 12 h, or 4 h idle; 5 wrong passwords lock an account for 15 min.
+- Logo and app icons (home screen, browser tab, `manifest.webmanifest`) are built from one
+  source by `console/brand/build-icons.mjs`; rerun it after changing the logo.
 - Install or update: `console/install.sh`. First admin, or when everyone is locked out:
   `node console/admin.js add-admin <email> "<Name>"` (also `reset`, `remove`, `list`).
 - Pausing writes `config/paused/<app>-<action>`, which `run.sh` honours. Display names
