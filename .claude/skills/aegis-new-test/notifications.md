@@ -1,9 +1,9 @@
-# Argus alert channels
+# Aegis alert channels
 
 A check alerts every destination listed in `<APP>_NOTIFY` (comma-separated) in
-`/root/argus/.env` when a run fails. Code: `core/report.js`. Check or test a setup
+`/root/aegis/.env` when a run fails. Code: `core/report.js`. Check or test a setup
 with `tools/notify.js --app <app> --check | --test`. The console
-(https://argus.fusioneta.com.my, Apps) edits the same list and sends test alerts, and
+(https://aegis.fusioneta.com.my, Apps) edits the same list and sends test alerts, and
 its Channels page shows which channels are set up and who they send as.
 
 - **Destinations** (the `<APP>_NOTIFY` values) are not secret. Claude may add or edit that line.
@@ -41,8 +41,8 @@ shows the expected messages per weekday; test with `tools/notify.js --app <app> 
 
 ## Failure screenshots
 
-When a run fails, Argus screenshots the page (`logs/screenshots/`, kept 30 days).
-Bitrix (needs the webhook's `disk` scope, which Argus's default webhook has), email and
+When a run fails, Aegis screenshots the page (`logs/screenshots/`, kept 30 days).
+Bitrix (needs the webhook's `disk` scope, which Aegis's default webhook has), email and
 Telegram get the image itself. Slack, Teams, Google Chat, WhatsApp and webhooks get a line
 naming the file on the server. If the image can't be attached, the text alert still goes
 out, and the log line says why.
@@ -51,11 +51,11 @@ out, and the log line says why.
 
 Under cron, `run.sh` re-runs a failed check once after 5 minutes. Only a second failure
 alerts, and that alert says it failed twice. Checks that change data opt out (an
-`argus:no-retry` line) and alert on the first failure. While a check keeps failing,
+`aegis:no-retry` line) and alert on the first failure. While a check keeps failing,
 it alerts **at most once a day** (MYT); later failures that day are only logged, and the
 next day's alert adds "failing since …". A new failure after a recovery alerts straight
-away. The first pass after a failure sends "✅ … is passing again" (Argus can't tell what fixed it)
-to the same destinations. Test runs with `ARGUS_NO_NOTIFY=1` change none of this.
+away. The first pass after a failure sends "✅ … is passing again" (Aegis can't tell what fixed it)
+to the same destinations. Test runs with `AEGIS_NO_NOTIFY=1` change none of this.
 
 ## Getting the IDs and credentials
 
@@ -63,8 +63,8 @@ to the same destinations. Test runs with `ARGUS_NO_NOTIFY=1` change none of this
 - **Group chat:** open it in Bitrix in a browser. The address bar shows `IM_DIALOG=chat1234`
   (or `dialogId=chat1234`); use `chat1234`.
 - **Person:** the number in their profile URL, `/company/personal/user/57/` → `57`.
-- **Webhook membership:** Argus posts through an inbound webhook that belongs to one Bitrix user. **That
-  user must be a member of every group chat** Argus posts to, so ask a chat admin to
+- **Webhook membership:** Aegis posts through an inbound webhook that belongs to one Bitrix user. **That
+  user must be a member of every group chat** Aegis posts to, so ask a chat admin to
   add them.
 - **Another portal:** a different portal or posting user needs its own inbound webhook with the `im`
   scope (Bitrix → Developer resources → Inbound webhook), stored as
@@ -72,7 +72,7 @@ to the same destinations. Test runs with `ARGUS_NO_NOTIFY=1` change none of this
 
 ### WhatsApp (Wazzup)
 - **Number format:** international, digits only (`60123456789`; `+60 12-345 6789` also works).
-- **No shared account:** Argus has no company-wide Wazzup account. An app that wants
+- **No shared account:** Aegis has no company-wide Wazzup account. An app that wants
   WhatsApp alerts brings its own: its Wazzup API key as `<APP>_WAZZUP_API_KEY` and its
   WhatsApp channel's `channelId` (from Wazzup) as `<APP>_WAZZUP_CHANNEL_ID`. Both are
   secrets, so the person adds them on the box. Always confirm with `--test`.
@@ -81,7 +81,7 @@ to the same destinations. Test runs with `ARGUS_NO_NOTIFY=1` change none of this
   messaged that number in the last 24 hours, so use another channel.
 
 ### Email (SMTP)
-Use a dedicated sender mailbox (e.g. `argus@` or `notifications@`), not a person's.
+Use a dedicated sender mailbox (e.g. `aegis@` or `notifications@`), not a person's.
 Common settings:
 
 | Provider | `SMTP_HOST` | `SMTP_PORT` | Notes |
@@ -102,7 +102,7 @@ Common settings:
    **Person:** they open the bot and press Start.
 3. Find the chat ID on the box. This prints IDs and names only, never the token:
    ```bash
-   /opt/node24/bin/node --env-file=/root/argus/.env -e 'const r=await (await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getUpdates`)).json(); for (const u of r.result||[]) { const c=(u.message||u.my_chat_member||{}).chat; if (c) console.log(c.id, c.type, c.title||c.username||c.first_name); }' --input-type=module
+   /opt/node24/bin/node --env-file=/root/aegis/.env -e 'const r=await (await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getUpdates`)).json(); for (const u of r.result||[]) { const c=(u.message||u.my_chat_member||{}).chat; if (c) console.log(c.id, c.type, c.title||c.username||c.first_name); }' --input-type=module
    ```
    Group IDs are negative (supergroups start with `-100`).
 
@@ -112,7 +112,7 @@ then pick the channel. The URL (`https://hooks.slack.com/services/...`) is a sec
 
 ### Microsoft Teams
 In the channel, go to **⋯ → Workflows**, then pick **"Post to a channel when a webhook
-request is received"**. Copy the URL it gives (secret). Argus sends an Adaptive Card,
+request is received"**. Copy the URL it gives (secret). Aegis sends an Adaptive Card,
 which that workflow posts as-is. The old "Incoming Webhook" connectors are retired.
 
 ### Google Chat (Google Workspace only)
@@ -120,14 +120,14 @@ In the space, go to **Apps & integrations → Webhooks → Add webhook**. The UR
 and token, so it's a secret.
 
 ### Generic webhook
-Argus POSTs JSON `{ "source": "argus", "app", "subject", "text", "sentAt" }` to the
+Aegis POSTs JSON `{ "source": "aegis", "app", "subject", "text", "sentAt" }` to the
 URL. Use it for n8n, Zapier, Make or an in-house endpoint.
 
 ## Troubleshooting `failed for ...` lines
 
 | Error | Usual cause |
 | --- | --- |
-| `bitrix:chat…` → `ACCESS_ERROR` / `CHAT_ID_EMPTY` | Argus's webhook user isn't in that chat, or the ID is wrong. |
+| `bitrix:chat…` → `ACCESS_ERROR` / `CHAT_ID_EMPTY` | Aegis's webhook user isn't in that chat, or the ID is wrong. |
 | `screenshot NOT attached: insufficient_scope` | The Bitrix webhook lacks the `disk` scope (needed for images). The text alert was sent. |
 | `email:` → `Invalid login` / `535` | Wrong password; Gmail needs an App Password; M365 SMTP AUTH is disabled. |
 | `email:` → timeout / `ECONNREFUSED` | Wrong host or port, or the provider blocks SMTP from servers. |

@@ -4,8 +4,8 @@ import { login } from './lib/login.js';
 import { sendReportOnFailure } from '../../core/report.js';
 import { nowMYT } from '../../core/time.js';
 
-// argus:changes-data — the console never offers "Run now" for this check.
-// argus:no-retry — this check clocks the smoke account out on PROD; run.sh must
+// aegis:changes-data — the console never offers "Run now" for this check.
+// aegis:no-retry — this check clocks the smoke account out on PROD; run.sh must
 // never repeat it after a failure (a half-finished tap could double-act).
 
 const ACTION = 'Clock Out';
@@ -69,7 +69,7 @@ try {
     // Filling it is a no-op for non-OT shifts (remark optional).
     const remark = page.locator('textarea');
     if (await remark.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await remark.fill('Argus smoke test — automated clock-out');
+      await remark.fill('Aegis smoke test — automated clock-out');
       console.log('[clockout] filled shift remark (OT gate)');
     }
 
@@ -138,7 +138,7 @@ function buildReport(r) {
   }
 
   return [
-    `🤖 Argus — ${ACTION} Report`,
+    `🤖 Aegis — ${ACTION} Report`,
     `📅 ${ts} (MYT)`,
     `👤 Account: ${EMAIL}`,
     ``,

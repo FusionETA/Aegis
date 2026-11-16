@@ -1,4 +1,4 @@
-// Argus failure alerts.
+// Aegis failure alerts.
 //
 // Always log the report locally (stdout -> logs/<...>.log). Only send it out when
 // the run FAILED (result.error is set). Successful runs stay quiet.
@@ -26,7 +26,7 @@
 // still goes out without it), email, Telegram.
 //
 // RETRY + RECOVERED: a failed run exits 1. When run.sh will retry it
-// (ARGUS_ATTEMPT < ARGUS_ATTEMPTS) the first failure only logs; the alert goes out
+// (AEGIS_ATTEMPT < AEGIS_ATTEMPTS) the first failure only logs; the alert goes out
 // if the retry fails too. Each check's last final result is kept in
 // logs/state/<check>.json: a failure while already failing adds "failing since",
 // and the first pass after a failure sends "✅ … is passing again" to the same destinations.
@@ -38,7 +38,7 @@
 // MY_APP_REPORTS (same destination format). Not limited per day; a destination that
 // just got this run's failure alert isn't sent it twice. Set in the console's Apps page.
 //
-// ARGUS_NO_NOTIFY=1 suppresses every send (use it for test runs); such runs also
+// AEGIS_NO_NOTIFY=1 suppresses every send (use it for test runs); such runs also
 // leave the stored state alone.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
@@ -116,7 +116,7 @@ const CHANNELS = {
     valid: (to) => /^\d{8,15}$/.test(to),
     needs: () => ['WAZZUP_API_KEY', 'WAZZUP_CHANNEL_ID'],
     async send(to, text, { app }) {
-      const api = process.env.ARGUS_WAZZUP_API || 'https://api.wazzup24.com'; // override for tests only
+      const api = process.env.AEGIS_WAZZUP_API || 'https://api.wazzup24.com'; // override for tests only
       await postJson(
         `${api}/v3/message`,
         { channelId: env(app, 'WAZZUP_CHANNEL_ID'), chatId: to, chatType: 'whatsapp', text },
@@ -150,7 +150,7 @@ const CHANNELS = {
     valid: (to) => /^(-?\d+|@\w{5,})$/.test(to),
     needs: () => ['TELEGRAM_BOT_TOKEN'],
     async send(to, text, { app, screenshot }) {
-      const api = process.env.ARGUS_TELEGRAM_API || 'https://api.telegram.org'; // override for tests only
+      const api = process.env.AEGIS_TELEGRAM_API || 'https://api.telegram.org'; // override for tests only
       const bot = `${api}/bot${env(app, 'TELEGRAM_BOT_TOKEN')}`;
       await postJson(`${bot}/sendMessage`, { chat_id: to, text });
       if (!screenshot) return '';
@@ -183,7 +183,7 @@ const CHANNELS = {
     }],
   })),
   webhook: webhookChannel('webhook', (text, { app, subject }) => ({
-    source: 'argus',
+    source: 'aegis',
     app: app || 'ALTOMATEHR',
     subject,
     text,
@@ -249,7 +249,7 @@ export function parseList(app, list) {
   return { targets, problems };
 }
 
-const suppressed = () => /^(1|true|yes)$/i.test(process.env.ARGUS_NO_NOTIFY || '');
+const suppressed = () => /^(1|true|yes)$/i.test(process.env.AEGIS_NO_NOTIFY || '');
 const STATE_FILE = join(LOGS_DIR, 'state', `${CHECK_NAME}.json`);
 
 function readState() {
@@ -267,20 +267,20 @@ function writeState(state) {
 
 // quietPass: a passing run logs nothing (for checks that run every few minutes).
 export async function sendReportOnFailure(result, text, { app, quietPass = false } = {}) {
-  const attempt = Number(process.env.ARGUS_ATTEMPT || 1);
-  const attempts = Number(process.env.ARGUS_ATTEMPTS || 1);
+  const attempt = Number(process.env.AEGIS_ATTEMPT || 1);
+  const attempts = Number(process.env.AEGIS_ATTEMPTS || 1);
   const prev = suppressed() ? null : readState();
   const now = nowMYT();
 
   if (result?.error) {
     process.exitCode = 1;
-    if (result.screenshot) text += `\n\n📸 Screenshot: logs/screenshots/${basename(result.screenshot)} on the Argus server`;
+    if (result.screenshot) text += `\n\n📸 Screenshot: logs/screenshots/${basename(result.screenshot)} on the Aegis server`;
     if (attempt < attempts) {
       console.log('\n----- REPORT -----\n' + text + '\n------------------');
       console.log(`[report] failed on attempt ${attempt} of ${attempts} — no alert yet; run.sh will retry`);
       return;
     }
-    if (attempts > 1) text += `\n🔁 Failed at ${process.env.ARGUS_FIRST_FAILED_AT || 'the first try'} and again on the retry.`;
+    if (attempts > 1) text += `\n🔁 Failed at ${process.env.AEGIS_FIRST_FAILED_AT || 'the first try'} and again on the retry.`;
     const stillFailing = prev?.status === 'fail';
     const failedRuns = (stillFailing ? prev.failedRuns : 0) + 1;
     if (stillFailing) text += `\n⏳ Failing since ${prev.since} (${failedRuns} failed runs in a row).`;
@@ -305,17 +305,17 @@ export async function sendReportOnFailure(result, text, { app, quietPass = false
     console.log('[report] all checks passed — no alert sent');
   }
   if (prev?.status === 'fail') {
-    const title = text.split('\n')[0].replace(/^\W*Argus\s*—\s*/u, '').replace(/\s*Report$/, '');
+    const title = text.split('\n')[0].replace(/^\W*Aegis\s*—\s*/u, '').replace(/\s*Report$/, '');
     const runs = `${prev.failedRuns} failed run${prev.failedRuns === 1 ? '' : 's'}`;
     await sendReport(
       [
-        `✅ Argus — ${title} is passing again`,
+        `✅ Aegis — ${title} is passing again`,
         `📅 ${now} (MYT)`,
         '',
-        `It had been failing since ${prev.since} (${runs}). Argus doesn't know what changed; ` +
+        `It had been failing since ${prev.since} (${runs}). Aegis doesn't know what changed; ` +
           'if nobody fixed anything, the cause may come back.',
       ].join('\n'),
-      { app, subject: `[Argus] Passing again — ${title}` },
+      { app, subject: `[Aegis] Passing again — ${title}` },
     );
   }
   await sendRunReport(app, true, text);
@@ -327,12 +327,12 @@ export async function sendReportOnFailure(result, text, { app, quietPass = false
 export async function sendReport(text, { app, subject, screenshot, resolved, skip = new Set(), what = 'sent' } = {}) {
   const delivered = new Set();
   if (suppressed()) {
-    console.log('[report] ARGUS_NO_NOTIFY set — notifications suppressed');
+    console.log('[report] AEGIS_NO_NOTIFY set — notifications suppressed');
     return delivered;
   }
   const { targets, problems } = resolved || resolveTargets(app);
   for (const p of problems) console.error(`[report] ${p}`);
-  const subj = subject || `[Argus] FAILED — ${text.split('\n')[0].replace(/^\W+/u, '')}`;
+  const subj = subject || `[Aegis] FAILED — ${text.split('\n')[0].replace(/^\W+/u, '')}`;
   for (const { channel, to, ok } of targets) {
     const label = to ? `${channel}:${to}` : channel;
     if (!ok || skip.has(label)) continue;
@@ -353,9 +353,9 @@ async function sendRunReport(app, passed, text, screenshot, skip = new Set()) {
   if (suppressed()) return;
   const resolved = resolveReportTargets(app);
   if (!resolved.enabled) return;
-  const title = text.split('\n')[0].replace(/^\W*Argus\s*—\s*/u, '').replace(/\s*Report$/, '');
+  const title = text.split('\n')[0].replace(/^\W*Aegis\s*—\s*/u, '').replace(/\s*Report$/, '');
   await sendReport(`${passed ? '✅ Passed' : '❌ Failed'} — ${title}\n\n${text}`, {
     app, resolved, skip, what: 'run report sent',
-    subject: `[Argus] ${passed ? 'Passed' : 'Failed'} — ${title}`, screenshot: passed ? undefined : screenshot,
+    subject: `[Aegis] ${passed ? 'Passed' : 'Failed'} — ${title}`, screenshot: passed ? undefined : screenshot,
   });
 }

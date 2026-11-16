@@ -1,6 +1,7 @@
-/* Argus console. Layout: a calm watch-room — one top bar (brand, views, account); checks
+/* Aegis console. Layout: a calm watch-room — one top bar (brand, views, account); checks
    as ledgers grouped by app, each opening its own page; settings one app at a time. The logo is
-   the Argus eye and ΛRGUS wordmark (console/brand/build-icons.mjs); small eyes mark each run. */
+   the Aegis shield with a heartbeat and the ΛEGIS wordmark (console/brand/build-icons.mjs);
+   small dots mark each run. */
 :root {
   --glass: rgb(255 255 255 / .72); --glass-edge: rgb(255 255 255 / .7); --glass-shine: rgb(255 255 255 / .9); --glass-active: rgb(20 34 42 / .08);
   --bg: #f2f5f6;
@@ -55,8 +56,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding-block: 18px 14px; border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--ink); }
 .brand svg { flex: none; display: block; }
-.brand .mark { width: 54px; height: 35px; }
-.brand .word { width: 100px; height: 14px; }
+.brand .mark { width: 30px; height: 34px; }
+.brand .word { width: 90px; height: 14px; }
 .views { display: flex; gap: 4px; flex-wrap: wrap; }
 .views a { text-decoration: none; color: var(--muted); font-weight: 500; padding: 7px 12px; border-radius: 8px; }
 .views a:hover { color: var(--ink); background: var(--sunk); }
@@ -147,12 +148,9 @@ table.activity .who-cell { width: 180px; font-weight: 500; }
 .tag { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; padding: 1px 7px; border-radius: 5px; border: 1px solid var(--line); color: var(--muted); margin-left: 6px; vertical-align: 1px; }
 .tag.write { color: var(--warn); border-color: currentColor; }
 .eyes { display: flex; gap: 5px; align-items: center; }
-.eye { width: 16px; height: 10px; border-radius: 50%; display: grid; place-items: center; background: var(--pass-bg); border: 1.5px solid var(--pass); }
-.eye::after { content: ""; width: 4px; height: 4px; border-radius: 50%; background: var(--pass); }
-.eye.fail { background: var(--fail-bg); border-color: var(--fail); }
-.eye.fail::after { background: var(--fail); }
+.eye { width: 11px; height: 11px; border-radius: 50%; background: var(--pass); }
+.eye.fail { background: var(--fail); }
 .eye.none { background: transparent; border: 1.5px dashed var(--line); }
-.eye.none::after { background: transparent; }
 
 dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 7px 16px; margin: 0; font-size: 14px; }
 dt { color: var(--muted); }
@@ -228,8 +226,8 @@ input[type="text"], input[type="email"], input[type="password"], input[type="url
 .auth { min-height: 100%; display: grid; place-items: center; padding-block: 10vh 40px; }
 .auth .card { width: min(420px, 100%); }
 .auth .brand { flex-direction: column; gap: 14px; margin-bottom: 4px; }
-.auth .brand .mark { width: 92px; height: 60px; }
-.auth .brand .word { width: 136px; height: 19px; }
+.auth .brand .mark { width: 58px; height: 64px; }
+.auth .brand .word { width: 123px; height: 19px; }
 
 @media (max-width: 860px) {
   .ledger-head { display: none; }

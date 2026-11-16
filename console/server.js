@@ -1,8 +1,8 @@
-// Argus console — the web app at https://argus.fusioneta.com.my (behind Caddy).
+// Aegis console — the web app at https://aegis.fusioneta.com.my (behind Caddy).
 //
-// Runs as the unprivileged user argus-web (systemd: argus-console.service) on
+// Runs as the unprivileged user aegis-web (systemd: aegis-console.service) on
 // 127.0.0.1:3200. It owns sign-in, people, sessions and the change log
-// (console/store.js); everything about Argus itself — check status, logs, pausing,
+// (console/store.js); everything about Aegis itself — check status, logs, pausing,
 // alert destinations, app logins — is asked of the root agent (console/agent.js)
 // over its Unix socket, which only this user can open.
 import http from 'node:http';
@@ -14,11 +14,13 @@ import * as store from './store.js';
 
 const PORT = Number(process.env.CONSOLE_PORT || 3200);
 const HOST = process.env.CONSOLE_HOST || '127.0.0.1';
-const PUBLIC_URL = (process.env.CONSOLE_URL || 'https://argus.fusioneta.com.my').replace(/\/$/, '');
-const AGENT_SOCKET = process.env.AGENT_SOCKET || '/run/argus-agent/agent.sock';
+const PUBLIC_URL = (process.env.CONSOLE_URL || 'https://aegis.fusioneta.com.my').replace(/\/$/, '');
+// Other addresses the console is also served on (the old argus one, until it only redirects).
+const ALSO_URLS = (process.env.CONSOLE_ALSO_URLS || '').split(',').map((u) => u.trim().replace(/\/$/, '')).filter(Boolean);
+const AGENT_SOCKET = process.env.AGENT_SOCKET || '/run/aegis-agent/agent.sock';
 const SECURE_COOKIE = process.env.CONSOLE_INSECURE_COOKIE !== '1';   // only local tests over plain http turn this off
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
-const COOKIE = 'argus_session';
+const COOKIE = 'aegis_session';
 
 // ---------- agent client ----------
 let nextId = 1;
@@ -26,7 +28,7 @@ function agent(op, args, actor) {
   return new Promise((resolve, reject) => {
     const conn = net.createConnection(AGENT_SOCKET);
     let buf = '';
-    const timer = setTimeout(() => { conn.destroy(); reject(new UserError(504, 'Argus took too long to answer. Try again.')); }, 110_000);
+    const timer = setTimeout(() => { conn.destroy(); reject(new UserError(504, 'Aegis took too long to answer. Try again.')); }, 110_000);
     conn.setEncoding('utf8');
     conn.on('data', (d) => {
       buf += d;
@@ -35,7 +37,7 @@ function agent(op, args, actor) {
       const res = JSON.parse(buf.slice(0, buf.indexOf('\n')));
       res.ok ? resolve(res.result) : reject(new UserError(400, res.error));
     });
-    conn.on('error', () => { clearTimeout(timer); reject(new UserError(503, 'The Argus agent isn\'t running on the server.')); });
+    conn.on('error', () => { clearTimeout(timer); reject(new UserError(503, 'The Aegis agent isn\'t running on the server.')); });
     conn.write(JSON.stringify({ id: nextId++, op, args, actor }) + '\n');
   });
 }
@@ -74,8 +76,8 @@ async function body(req) {
 // that a form on another site can't send.
 function checkSameOrigin(req) {
   const origin = req.headers.origin;
-  const allowed = [PUBLIC_URL, `http://${HOST}:${PORT}`, `http://localhost:${PORT}`];
-  if (req.headers['x-argus'] !== '1' || (origin && !allowed.includes(origin))) throw new UserError(403, 'Request refused.');
+  const allowed = [PUBLIC_URL, ...ALSO_URLS, `http://${HOST}:${PORT}`, `http://localhost:${PORT}`];
+  if (req.headers['x-aegis'] !== '1' || (origin && !allowed.includes(origin))) throw new UserError(403, 'Request refused.');
 }
 
 // Tries per client address on the sign-in form, so a password can't be guessed fast.
@@ -158,7 +160,7 @@ async function api(req, res, url, user) {
     return send(res, 200, { ok: true }, undefined, { 'Set-Cookie': setCookie(store.createSession(user.id)) });
   }
 
-  // --- Argus, through the agent
+  // --- Aegis, through the agent
   const actor = actorOf(user);
   if (p === '/api/status' && m === 'GET') return send(res, 200, await agent('status', {}, actor));
   if (p === '/api/report' && m === 'GET') {

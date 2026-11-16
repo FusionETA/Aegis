@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="296 448 600 370" role="img" aria-label="Aegis" color="#f3efe8" fill="#f3efe8">
+  <g color="#f3efe8" fill="#f3efe8" transform="translate(596.5 572) scale(1.2247) translate(-100 -101)">
+  <path d="M100,18 C126,30 152,36 172,36 C172,112 150,156 100,184 C50,156 28,112 28,36 C48,36 74,30 100,18 Z" fill="none" stroke="currentColor" stroke-width="12" stroke-linejoin="round"/>
+  <path d="M33,106 H70 L84,76 L102,138 L118,88 L128,106 H167" fill="none" stroke="currentColor" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/></g>
+  <defs><clipPath id="aegis-cap"><rect x="300" y="723.3" width="700" height="73.4"/></clipPath></defs>
+  <path d="M336,796.7 L376,723.3 L415.7,796.7 L405.7,796.7 L376,741.7 L346,796.7 Z"/>
+  <g fill="none" stroke="currentColor" stroke-width="9" clip-path="url(#aegis-cap)">
+    <path d="M528,727.8 H483.3 V792.2 H528 M483.3,760 H521"/>
+    <path transform="translate(-11 0)" d="M667.6,738.8 A33.75,33.75 0 1 0 675.45,760.5 H645"/>
+    <path d="M735.5,720 V800"/>
+    <path transform="translate(-61 0)" d="M910.5,735 C904,729 896.5,727.5 889.5,727.5 C877.5,727.5 869.5,734 869.5,743.5 C869.5,754 880.5,757 891.5,760 C905,763.5 915,768 915,778 C915,788 904,793.7 890.5,793.7 C879,793.7 870,789.5 866,783"/>
+  </g></svg>

@@ -1,6 +1,6 @@
 {
-  "name": "Argus Console",
-  "short_name": "Argus",
+  "name": "Aegis Console",
+  "short_name": "Aegis",
   "description": "FusionETA's testing bot: check status, history and settings.",
   "start_url": "/",
   "scope": "/",

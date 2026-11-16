@@ -1,6 +1,6 @@
-// Accounts, sessions, one-time links and the change log for the Argus console.
+// Accounts, sessions, one-time links and the change log for the Aegis console.
 //
-// Small JSON files in DATA_DIR (/var/lib/argus-console, owned by argus-web):
+// Small JSON files in DATA_DIR (/var/lib/aegis-console, owned by aegis-web):
 //   users.json     people: name, email, role, Bitrix ID, scrypt password hash
 //   sessions.json  signed-in browsers: sha256 of the cookie token, created, last seen
 //   tokens.json    one-time setup / reset links: sha256 of the token, expiry
@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
-export const DATA_DIR = process.env.CONSOLE_DATA_DIR || '/var/lib/argus-console';
+export const DATA_DIR = process.env.CONSOLE_DATA_DIR || '/var/lib/aegis-console';
 export const SESSION_MAX_MS = 12 * 3600_000;   // signed out 12 h after signing in
 export const SESSION_IDLE_MS = 4 * 3600_000;   // ...or after 4 h without activity
 export const LINK_TTL_MS = 24 * 3600_000;      // setup / reset links work once, for 24 h

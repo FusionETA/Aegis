@@ -6,7 +6,7 @@ $('#login').addEventListener('submit', async (e) => {
   err.hidden = true; go.disabled = true;
   try {
     const res = await fetch('/api/login', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Argus': '1' },
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Aegis': '1' },
       body: JSON.stringify({ email: $('#email').value, password: $('#password').value }),
     });
     if (res.ok) { location.href = '/'; return; }

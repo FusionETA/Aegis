@@ -1,7 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><defs><radialGradient id="g" cx="50%" cy="47%" r="55%"><stop offset="0" stop-color="#fff" stop-opacity=".13"/><stop offset=".6" stop-color="#fff" stop-opacity=".03"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>
   <rect width="64" height="64" rx="14.4" fill="#0b1114"/><rect width="64" height="64" rx="14.4" fill="url(#g)"/>
-  <g fill="#f3efe8" transform="translate(32 32.64) scale(0.1319) translate(-629 -555.5)">
-  <path d="M519,506 C560,410 692,393 828,510 C732,463 600,418 519,506 Z"/>
-  <path d="M430,586 C480,550 545,500 620,489 C700,496 762,526 818,533 L612,683 L757,541 C720,526 680,511 640,509 L603,509 C562,516 510,540 473,566 C515,566 560,590 604,635 C578,616 532,590 487,581 C462,577 442,580 430,586 Z"/>
-  <path fill-rule="evenodd" d="M555.5,529 A67,67 0 1 0 688.5,529 Z M564,529 A58,58 0 1 0 680,529 Z"/>
-  <circle cx="622" cy="526" r="23"/></g></svg>
+  <g color="#f3efe8" fill="#f3efe8" transform="translate(32 32) scale(0.2876) translate(-100 -101)">
+  <path d="M100,18 C126,30 152,36 172,36 C172,112 150,156 100,184 C50,156 28,112 28,36 C48,36 74,30 100,18 Z" fill="none" stroke="currentColor" stroke-width="12" stroke-linejoin="round"/>
+  <path d="M33,106 H70 L84,76 L102,138 L118,88 L128,106 H167" fill="none" stroke="currentColor" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/></g></svg>

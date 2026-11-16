@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Argus cron wrapper — runs a plugin action under a virtual X display and logs it.
+# Aegis cron wrapper — runs a plugin action under a virtual X display and logs it.
 # Usage: run.sh <app>/<action>   -> plugins/<app>/<action>.js, log logs/<app>-<action>.log
 #        run.sh <action>         -> AltomateHR (plugins/altomatehr/<action>.js, logs/<action>.log),
 #                                   kept for the original clockin | clockout | claims-check cron lines
@@ -18,15 +18,15 @@ else
   SCRIPT="plugins/altomatehr/${ACTION}.js"
 fi
 
-# Node binary: override with ARGUS_NODE (e.g. a side-by-side /opt/node24/bin/node
+# Node binary: override with AEGIS_NODE (e.g. a side-by-side /opt/node24/bin/node
 # on hosts whose system node is too old for Playwright).
-NODE="${ARGUS_NODE:-/usr/bin/node}"
+NODE="${AEGIS_NODE:-/usr/bin/node}"
 
 mkdir -p logs
 LOG="logs/${ACTION//\//-}.log"
 TS="$(date '+%Y-%m-%d %H:%M:%S %Z')"
 
-# Paused from the Argus console (config/paused/<app>-<action> exists): log one line, run nothing.
+# Paused from the Aegis console (config/paused/<app>-<action> exists): log one line, run nothing.
 if [[ -e "config/paused/${ACTION//\//-}" ]]; then
   echo "===== ${ACTION} @ ${TS}: paused in the console, skipped =====" >> "$LOG"
   exit 0
@@ -34,27 +34,27 @@ fi
 
 # Overlap guard: one run per check at a time. If the previous run is still going
 # (a slow site, a retry still waiting), this run is skipped instead of piling up.
-exec 8> "/run/lock/argus-${ACTION//\//-}.lock"
+exec 8> "/run/lock/aegis-${ACTION//\//-}.lock"
 if ! flock -n 8; then
   echo "===== ${ACTION} @ ${TS}: previous run still going, skipped =====" >> "$LOG"
   exit 0
 fi
 
-# Checks that don't open a browser ("argus:no-browser" line) skip the virtual display.
+# Checks that don't open a browser ("aegis:no-browser" line) skip the virtual display.
 LAUNCH=(/usr/bin/xvfb-run -a)
-grep -q 'argus:no-browser' "$SCRIPT" 2>/dev/null && LAUNCH=()
+grep -q 'aegis:no-browser' "$SCRIPT" 2>/dev/null && LAUNCH=()
 
-# Retry: a failed run is run once more after ARGUS_RETRY_DELAY seconds (default
+# Retry: a failed run is run once more after AEGIS_RETRY_DELAY seconds (default
 # 300) and alerts only if it fails again (core/report.js holds the first alert
-# back). Scripts that change data opt out with an "argus:no-retry" line, so a
+# back). Scripts that change data opt out with an "aegis:no-retry" line, so a
 # half-finished action is never repeated.
 ATTEMPTS=2
-grep -q 'argus:no-retry' "$SCRIPT" 2>/dev/null && ATTEMPTS=1
-DELAY="${ARGUS_RETRY_DELAY:-300}"
+grep -q 'aegis:no-retry' "$SCRIPT" 2>/dev/null && ATTEMPTS=1
+DELAY="${AEGIS_RETRY_DELAY:-300}"
 FIRST_FAILED_AT=""
 
 run_once() {
-  ARGUS_ATTEMPT="$1" ARGUS_ATTEMPTS="$ATTEMPTS" ARGUS_FIRST_FAILED_AT="$FIRST_FAILED_AT" \
+  AEGIS_ATTEMPT="$1" AEGIS_ATTEMPTS="$ATTEMPTS" AEGIS_FIRST_FAILED_AT="$FIRST_FAILED_AT" \
     "${LAUNCH[@]}" "$NODE" "$SCRIPT" >> "$LOG" 2>&1
 }
 

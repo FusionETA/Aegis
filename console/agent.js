@@ -1,8 +1,8 @@
-// Argus console agent — the only part of the console that touches Argus itself.
+// Aegis console agent — the only part of the console that touches Aegis itself.
 //
-// Runs as root (systemd: argus-agent.service) and answers a fixed list of
+// Runs as root (systemd: aegis-agent.service) and answers a fixed list of
 // operations over a Unix socket that only the console's own user can open. The web
-// console (console/server.js, user argus-web) has no access to /root/argus; it asks
+// console (console/server.js, user aegis-web) has no access to /root/aegis; it asks
 // this agent instead. Every input is validated here, never trusted from the caller,
 // and every change is appended to logs/console-changes.log (who, what, never values).
 //
@@ -13,14 +13,14 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 
-const HOME = process.env.ARGUS_HOME || '/root/argus';
-const SOCKET = process.env.AGENT_SOCKET || '/run/argus-agent/agent.sock';
-const SOCKET_GROUP = process.env.AGENT_GROUP ?? 'argus-web';
-const NODE = process.env.ARGUS_NODE || '/opt/node24/bin/node';
-const CONSOLE_URL = (process.env.CONSOLE_URL || 'https://argus.fusioneta.com.my').replace(/\/$/, '');
+const HOME = process.env.AEGIS_HOME || '/root/aegis';
+const SOCKET = process.env.AGENT_SOCKET || '/run/aegis-agent/agent.sock';
+const SOCKET_GROUP = process.env.AGENT_GROUP ?? 'aegis-web';
+const NODE = process.env.AEGIS_NODE || '/opt/node24/bin/node';
+const CONSOLE_URL = (process.env.CONSOLE_URL || 'https://aegis.fusioneta.com.my').replace(/\/$/, '');
 const ENV_FILE = path.join(HOME, '.env');
 const CRED_FIELDS = ['URL', 'LOGIN_URL', 'EMAIL', 'USERNAME', 'PASSWORD'];
-const CRONTAB_FILE = process.env.ARGUS_CRONTAB || '';   // tests only: a file standing in for root's crontab
+const CRONTAB_FILE = process.env.AEGIS_CRONTAB || '';   // tests only: a file standing in for root's crontab
 
 const requireHome = createRequire(path.join(HOME, 'package.json'));
 const dotenv = requireHome('dotenv');
@@ -34,7 +34,7 @@ const readEnv = () => (fs.existsSync(ENV_FILE) ? dotenv.parse(fs.readFileSync(EN
 // Runs fn with process.env = the agent's own env + the current .env (so report.js
 // resolves destinations exactly as a check would), then restores it.
 const BASE_ENV = { ...process.env };
-function withArgusEnv(fn, extra = {}) {
+function withAegisEnv(fn, extra = {}) {
   const parsed = { ...readEnv(), ...extra };
   for (const k of Object.keys(process.env)) delete process.env[k];
   Object.assign(process.env, BASE_ENV, parsed);
@@ -132,14 +132,14 @@ function requireApp(app) {
 function markers(action) {
   const src = fs.existsSync(scriptFor(action)) ? fs.readFileSync(scriptFor(action), 'utf8') : '';
   return {
-    changesData: src.includes('argus:changes-data'),
-    noRetry: src.includes('argus:no-retry'),
-    noBrowser: src.includes('argus:no-browser'),
+    changesData: src.includes('aegis:changes-data'),
+    noRetry: src.includes('aegis:no-retry'),
+    noBrowser: src.includes('aegis:no-browser'),
   };
 }
 
 function isRunning(action) {
-  const lock = `/run/lock/argus-${fileName(action)}.lock`;
+  const lock = `/run/lock/aegis-${fileName(action)}.lock`;
   if (!fs.existsSync(lock)) return false;
   return spawnSync('flock', ['-n', lock, 'true']).status !== 0;
 }
@@ -234,7 +234,7 @@ function writeSchedule(action, schedule) {
   } else if (i !== undefined) {
     lines[i] = lines[i].replace(CRON_LINE, (all, a, old, b, act, e) => `${a}${schedule}${b}${act}${e}`);
   } else {
-    lines.push(`# ${action} — scheduled from the Argus console. Log: ${path.join(HOME, 'logs', `${fileName(action)}.log`)}`, `${schedule} ${path.join(HOME, 'run.sh')} ${action}`);
+    lines.push(`# ${action} — scheduled from the Aegis console. Log: ${path.join(HOME, 'logs', `${fileName(action)}.log`)}`, `${schedule} ${path.join(HOME, 'run.sh')} ${action}`);
   }
   installCrontab(lines.join('\n') + '\n');
 }
@@ -290,9 +290,9 @@ function reportText(action, start) {
   return out.join('\n');
 }
 
-// run.sh's retry delay: ARGUS_RETRY_DELAY in the crontab, else 300 s.
+// run.sh's retry delay: AEGIS_RETRY_DELAY in the crontab, else 300 s.
 function retryDelayText() {
-  const m = crontab().match(/^\s*ARGUS_RETRY_DELAY=["']?(\d+)/m);
+  const m = crontab().match(/^\s*AEGIS_RETRY_DELAY=["']?(\d+)/m);
   const sec = m ? Number(m[1]) : 300;
   return sec % 60 ? `${sec} seconds` : `${sec / 60} minute${sec === 60 ? '' : 's'}`;
 }
@@ -312,14 +312,14 @@ function runsPerWeekday(expr) {
 }
 
 function alertStatus(app) {
-  return withArgusEnv(() => {
+  return withAegisEnv(() => {
     const r = resolveTargets(app);
     return { source: r.source, targets: r.targets, problems: r.problems };
   });
 }
 
 function reportStatus(app) {
-  return withArgusEnv(() => {
+  return withAegisEnv(() => {
     const r = resolveReportTargets(app);
     return { enabled: r.enabled, targets: r.targets, problems: r.problems };
   });
@@ -394,7 +394,7 @@ function fieldProblem(key, v) {
   if (key === 'BITRIX_DIALOG_ID') return v.split(',').every((d) => /^(chat\d+|\d+)$/.test(d.trim())) ? null : 'Default chats are chat IDs like chat6356 (or a person\'s user number), separated by commas.';
   if (key === 'SMTP_PORT') return /^\d{2,5}$/.test(v) ? null : 'The port is a number, usually 587 (or 465).';
   if (key === 'SMTP_HOST') return /^[A-Za-z0-9.-]+$/.test(v) ? null : 'The SMTP server is a host name like smtp.office365.com.';
-  if (key === 'SMTP_FROM' && !v.includes('@')) return 'The From address needs an email address, e.g. Argus <argus@fusioneta.com>.';
+  if (key === 'SMTP_FROM' && !v.includes('@')) return 'The From address needs an email address, e.g. Aegis <aegis@fusioneta.com>.';
   if (key === 'TELEGRAM_BOT_TOKEN') return /^\d+:[\w-]{30,}$/.test(v) ? null : 'A bot token from @BotFather looks like 123456789:AA…';
   return null;
 }
@@ -500,7 +500,7 @@ const OPS = {
     if (fs.existsSync(path.join(HOME, 'config', 'paused', fileName(action)))) refuse('This check is paused. Resume it first.');
     if (isRunning(action)) refuse('This check is already running.');
     const child = spawn(path.join(HOME, 'run.sh'), [action], {
-      cwd: HOME, detached: true, stdio: 'ignore', env: { ...BASE_ENV, ARGUS_NODE: NODE },
+      cwd: HOME, detached: true, stdio: 'ignore', env: { ...BASE_ENV, AEGIS_NODE: NODE },
     });
     child.unref();
     logChange(actor, 'run-now', action);
@@ -536,7 +536,7 @@ const OPS = {
     if (list.some((d) => d.length > 200 || /[\n\r,]/.test(d))) refuse('Bad destination.');
     if (enabled && !list.length) refuse('Add a destination for run reports first.');
     const value = list.join(', ');
-    const check = withArgusEnv(() => resolveReportTargets(app), { [`${app}_REPORTS`]: value, [`${app}_REPORTS_ENABLED`]: enabled ? '1' : '' });
+    const check = withAegisEnv(() => resolveReportTargets(app), { [`${app}_REPORTS`]: value, [`${app}_REPORTS_ENABLED`]: enabled ? '1' : '' });
     const errors = check.problems.filter((p) => !p.includes(': missing '));
     if (list.length && errors.length) refuse(errors.join(' '));
     writeEnvKey(`${app}_REPORTS`, list.length ? value : null);
@@ -551,7 +551,7 @@ const OPS = {
     const list = destinations.map((d) => String(d).trim()).filter(Boolean);
     if (list.some((d) => d.length > 200 || /[\n\r,]/.test(d))) refuse('Bad destination.');
     const value = list.join(', ');
-    const check = withArgusEnv(() => resolveTargets(app), { [`${app}_NOTIFY`]: value });
+    const check = withAegisEnv(() => resolveTargets(app), { [`${app}_NOTIFY`]: value });
     const errors = list.length ? check.problems.filter((p) => !p.includes(': missing ')) : [];
     if (errors.length) refuse(errors.join(' '));
     writeEnvKey(`${app}_NOTIFY`, list.length ? value : null);
@@ -615,7 +615,7 @@ const OPS = {
     if (!changes.length) refuse('Nothing to change.');
     for (const [k, v] of changes) {
       if (!fields.some(([key]) => key === k)) refuse('Unknown setting.');
-      if (v === null) { if (k === 'BITRIX_DIALOG_ID') refuse('Argus always needs a default chat. Change it instead of removing it.'); continue; }
+      if (v === null) { if (k === 'BITRIX_DIALOG_ID') refuse('Aegis always needs a default chat. Change it instead of removing it.'); continue; }
       if (typeof v !== 'string' || !v.trim() || v.length > 500 || /[\n\r\0]/.test(v)) refuse('Values must be 1–500 characters on one line.');
       const problem = fieldProblem(k, v.trim());
       if (problem) refuse(problem);
@@ -661,8 +661,8 @@ const OPS = {
     if (typeof link !== 'string' || !link.startsWith(`${CONSOLE_URL}/setup#t=`) || link.length > 300) refuse('Bad link.');
     const who = String(name || '').slice(0, 80).replace(/[\n\r]/g, ' ');
     const text = kind === 'reset'
-      ? `🔑 Argus console: a password reset was requested for ${who}.\nSet a new password here (works once, for 24 hours):\n${link}`
-      : `👋 ${who}, you've been invited to the Argus console.\nChoose your password here (works once, for 24 hours):\n${link}`;
+      ? `🔑 Aegis console: a password reset was requested for ${who}.\nSet a new password here (works once, for 24 hours):\n${link}`
+      : `👋 ${who}, you've been invited to the Aegis console.\nChoose your password here (works once, for 24 hours):\n${link}`;
     const hook = (readEnv().BITRIX_WEBHOOK_URL || '').trim().replace(/\/+$/, '');
     if (!hook) refuse('Bitrix isn\'t set up on the server.');
     return fetch(`${hook}/im.message.add.json`, {
@@ -710,6 +710,6 @@ server.listen(SOCKET, () => {
     if (Number.isInteger(gid)) fs.chownSync(SOCKET, 0, gid);
     fs.chmodSync(SOCKET, 0o660);
   }
-  console.log(`[agent] listening on ${SOCKET} (Argus at ${HOME})`);
+  console.log(`[agent] listening on ${SOCKET} (Aegis at ${HOME})`);
 });
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { server.close(); process.exit(0); });
