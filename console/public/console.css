@@ -1,6 +1,6 @@
 /* Argus console. Layout: a calm watch-room — one top bar (brand, views, account); checks
-   as ledgers grouped by app, each opening its own page; settings one app at a time. The peacock eye
-   (Argus's hundred eyes ended up on the peacock's tail) is the logo and the run mark. */
+   as ledgers grouped by app, each opening its own page; settings one app at a time. The logo is
+   the Argus eye and ΛRGUS wordmark (console/brand/build-icons.mjs); small eyes mark each run. */
 :root {
   --bg: #f2f5f6;
   --surface: #ffffff;
@@ -51,9 +51,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* top bar */
 .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding-block: 18px 14px; border-bottom: 1px solid var(--line); }
-.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
-.brand b { font-family: var(--font-display); font-size: 21px; font-weight: 700; letter-spacing: -0.02em; }
-.brand svg { width: 34px; height: 24px; flex: none; }
+.brand { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--ink); }
+.brand svg { flex: none; display: block; }
+.brand .mark { width: 44px; height: 29px; }
+.brand .word { width: 74px; height: 13px; }
 .views { display: flex; gap: 4px; flex-wrap: wrap; }
 .views a { text-decoration: none; color: var(--muted); font-weight: 500; padding: 7px 12px; border-radius: 8px; }
 .views a:hover { color: var(--ink); background: var(--sunk); }
@@ -220,7 +221,9 @@ input[type="text"], input[type="email"], input[type="password"], input[type="url
 /* sign-in and setup pages */
 .auth { min-height: 100%; display: grid; place-items: center; padding-block: 10vh 40px; }
 .auth .card { width: min(420px, 100%); }
-.auth .brand { justify-content: center; }
+.auth .brand { flex-direction: column; gap: 14px; margin-bottom: 4px; }
+.auth .brand .mark { width: 92px; height: 60px; }
+.auth .brand .word { width: 108px; height: 19px; }
 
 @media (max-width: 860px) {
   .ledger-head { display: none; }
