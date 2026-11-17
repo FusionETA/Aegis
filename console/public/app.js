@@ -273,9 +273,14 @@ async function refreshStatus() {
     badge.hidden = !failing; badge.textContent = failing;
     badge.setAttribute('aria-label', `${failing} failing`);
   } catch (err) {
-    if (!status) $('#view-checks').innerHTML = `<p class="msg err">${esc(err.message)}</p>`;
+    if (!status) { $('#view-checks').innerHTML = `<p class="msg err">${esc(err.message)}</p>`; return; }
+    // Keep showing the last data, but say plainly that it's old.
+    const stale = $('#stale');
+    stale.innerHTML = `Couldn't update since ${esc(clock(statusAt))}, so what you see may be out of date. Check your connection, then <button class="link-btn" type="button" data-act="reload">reload the page</button>.`;
+    stale.hidden = false;
     return;
   }
+  $('#stale').hidden = true;
   const { v, arg } = parseHash();
   if (v === 'checks') renderChecks();
   if (v === 'check' && $('#sched-editor')?.hidden !== false) renderCheck(arg);   // not while the schedule is being edited
@@ -516,6 +521,7 @@ document.addEventListener('click', async (e) => {
   if (!el || el.tagName === 'FORM' || (el.tagName === 'INPUT' && el.type === 'checkbox')) return;
   const act = el.dataset.act;
   try {
+    if (act === 'reload') location.reload();
     if (act === 'report') openReport(el.dataset.action, el.dataset.start);
     if (act === 'close') closeOverlay();
     if (act === 'run') {

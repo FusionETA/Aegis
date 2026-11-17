@@ -7,7 +7,7 @@ $('#login').addEventListener('submit', async (e) => {
   try {
     const res = await fetch('/api/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Aegis': '1' },
-      body: JSON.stringify({ email: $('#email').value, password: $('#password').value }),
+      body: JSON.stringify({ email: $('#email').value, password: $('#password').value, remember: $('#remember').checked }),
     });
     if (res.ok) { location.href = '/'; return; }
     err.textContent = (await res.json().catch(() => ({}))).error || 'Couldn\'t sign in. Try again.';
