@@ -283,3 +283,9 @@ h2.sub { font-size: 16px; margin-top: 6px; }
 .chan-form { padding-top: 12px; border-top: 1px solid var(--line); }
 .side-sec.retire { border-bottom: 0; padding-bottom: 0; padding-top: 14px; border-top: 1px solid var(--line); }
 .stat small .link-btn { font-size: inherit; }
+
+/* "Keep me signed in" on the sign-in page; the "couldn't update" warning */
+.form label.check { display: flex; gap: 10px; align-items: flex-start; font-weight: 500; }
+.form label.check input { margin: 3px 0 0; width: 16px; height: 16px; flex: none; accent-color: var(--accent); }
+.form label.check small { display: block; margin-top: 2px; }
+.stale { position: sticky; top: 8px; z-index: 15; margin-top: 16px; box-shadow: 0 4px 14px rgb(0 0 0 / .08); }

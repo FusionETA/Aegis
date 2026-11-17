@@ -63,7 +63,7 @@ function cookieToken(req) {
   const m = (req.headers.cookie || '').match(new RegExp(`(?:^|;\\s*)${COOKIE}=([A-Za-z0-9_-]+)`));
   return m ? m[1] : null;
 }
-const setCookie = (token) => `${COOKIE}=${token}; HttpOnly; ${SECURE_COOKIE ? 'Secure; ' : ''}SameSite=Lax; Path=/; Max-Age=${store.SESSION_MAX_MS / 1000}`;
+const setCookie = (token, remember = false) => `${COOKIE}=${token}; HttpOnly; ${SECURE_COOKIE ? 'Secure; ' : ''}SameSite=Lax; Path=/; Max-Age=${(remember ? store.REMEMBER_MAX_MS : store.SESSION_MAX_MS) / 1000}`;
 const clearCookie = () => `${COOKIE}=; HttpOnly; ${SECURE_COOKIE ? 'Secure; ' : ''}SameSite=Lax; Path=/; Max-Age=0`;
 
 async function body(req) {
@@ -121,11 +121,11 @@ async function api(req, res, url, user) {
   // --- sign-in and accounts
   if (p === '/api/login' && m === 'POST') {
     throttle(clientIp(req));
-    const { email, password } = await body(req);
+    const { email, password, remember } = await body(req);
     let u;
     try { u = store.checkPassword(email, password); } catch (err) { store.audit(String(email || '').slice(0, 120), 'sign-in failed'); throw new UserError(401, err.message); }
-    store.audit(actorOf(u), 'signed in');
-    return send(res, 200, { ok: true }, undefined, { 'Set-Cookie': setCookie(store.createSession(u.id)) });
+    store.audit(actorOf(u), remember ? 'signed in (kept signed in on this device)' : 'signed in');
+    return send(res, 200, { ok: true }, undefined, { 'Set-Cookie': setCookie(store.createSession(u.id, !!remember), !!remember) });
   }
   if (p === '/api/logout' && m === 'POST') {
     store.endSession(cookieToken(req));
@@ -155,9 +155,10 @@ async function api(req, res, url, user) {
     if (!store.verifyCurrentPassword(user, current)) throw new UserError(400, 'Your current password is incorrect.');
     const problem = store.passwordProblem(next, user);
     if (problem) throw new UserError(400, problem);
+    const remember = store.sessionRemembers(cookieToken(req));   // this device stays as it was
     store.setPassword(user.id, next);
     store.audit(actorOf(user), 'changed their password');
-    return send(res, 200, { ok: true }, undefined, { 'Set-Cookie': setCookie(store.createSession(user.id)) });
+    return send(res, 200, { ok: true }, undefined, { 'Set-Cookie': setCookie(store.createSession(user.id, remember), remember) });
   }
 
   // --- Aegis, through the agent

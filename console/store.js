@@ -2,7 +2,7 @@
 //
 // Small JSON files in DATA_DIR (/var/lib/aegis-console, owned by aegis-web):
 //   users.json     people: name, email, role, Bitrix ID, scrypt password hash
-//   sessions.json  signed-in browsers: sha256 of the cookie token, created, last seen
+//   sessions.json  signed-in browsers: sha256 of the cookie token, created, last seen, remember
 //   tokens.json    one-time setup / reset links: sha256 of the token, expiry
 //   audit.jsonl    who did what, newest last (never passwords or other secret values)
 // Every write goes to a temp file first and is renamed into place.
@@ -13,6 +13,8 @@ import crypto from 'node:crypto';
 export const DATA_DIR = process.env.CONSOLE_DATA_DIR || '/var/lib/aegis-console';
 export const SESSION_MAX_MS = 12 * 3600_000;   // signed out 12 h after signing in
 export const SESSION_IDLE_MS = 4 * 3600_000;   // ...or after 4 h without activity
+export const REMEMBER_MAX_MS = 30 * 24 * 3600_000;   // "Keep me signed in on this device": 30 days
+export const REMEMBER_IDLE_MS = 7 * 24 * 3600_000;   // ...as long as it's used at least once a week
 export const LINK_TTL_MS = 24 * 3600_000;      // setup / reset links work once, for 24 h
 const LOCK_AFTER = 5;                          // wrong passwords in a row before a lockout
 const LOCK_MS = 15 * 60_000;
@@ -120,15 +122,20 @@ export const verifyCurrentPassword = (u, pw) => passwordMatches(String(pw || '')
 // ---------- sessions ----------
 const sessions = () => load('sessions.json', []);
 const saveSessions = (list) => save('sessions.json', list);
+const isLive = (s, now) => (s.remember
+  ? now - s.created < REMEMBER_MAX_MS && now - s.lastSeen < REMEMBER_IDLE_MS
+  : now - s.created < SESSION_MAX_MS && now - s.lastSeen < SESSION_IDLE_MS);
 
-export function createSession(userId) {
+// remember: "Keep me signed in on this device" was ticked (longer limits above).
+export function createSession(userId, remember = false) {
   const token = newToken();
   const now = Date.now();
-  const live = sessions().filter((s) => now - s.created < SESSION_MAX_MS && now - s.lastSeen < SESSION_IDLE_MS);
-  live.push({ hash: sha256(token), userId, created: now, lastSeen: now });
+  const live = sessions().filter((s) => isLive(s, now));
+  live.push({ hash: sha256(token), userId, created: now, lastSeen: now, remember: !!remember });
   saveSessions(live);
   return token;
 }
+export const sessionRemembers = (token) => !!sessions().find((s) => s.hash === sha256(String(token || '')))?.remember;
 
 // The signed-in user for a cookie token, or null. Refreshes "last seen" at most once a minute.
 export function sessionUser(token) {
@@ -136,7 +143,7 @@ export function sessionUser(token) {
   const list = sessions();
   const s = list.find((x) => x.hash === sha256(token));
   const now = Date.now();
-  if (!s || now - s.created > SESSION_MAX_MS || now - s.lastSeen > SESSION_IDLE_MS) return null;
+  if (!s || !isLive(s, now)) return null;
   const u = findUser((x) => x.id === s.userId && x.passHash);
   if (!u) return null;
   if (now - s.lastSeen > 60_000) { s.lastSeen = now; saveSessions(list); }
