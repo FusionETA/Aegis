@@ -11,7 +11,9 @@ https://aegis.fusioneta.com.my.
 
 Aegis was called **Argus** until November 2026. The Argus logo, icons and their build
 script are kept in `brand/argus/` for use elsewhere. On the server, `/root/argus` is a
-link to `/root/aegis`, and https://argus.fusioneta.com.my forwards to the new address.
+link to `/root/aegis`. The old address, argus.fusioneta.com.my, no longer works: its DNS
+record was deleted on 17 Nov 2026, and the name is reserved for a new product called
+Argus, a supervisor for AI agents.
 
 **To add or change a check, ask Claude in a session on this repo.** The
 `aegis-new-test` skill (`.claude/skills/aegis-new-test/SKILL.md`) handles the
