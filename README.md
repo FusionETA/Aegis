@@ -85,6 +85,10 @@ log of every change.
 - **Node:** 24 at `/opt/node24/bin/node`, selected through the `AEGIS_NODE=` line at the top of
   root's crontab. The system `/usr/bin/node` is v18 and belongs to another service.
 - **Timezone:** the server runs on `Asia/Kuala_Lumpur`, so cron times are MYT.
+- **Argus:** `run.sh` reports each run (start, a retry, passed or failed with the last error
+  line) to [Argus](https://argus.fusioneta.com.my), where the checks show as bots, through
+  `core/argus.js`. It uses `ARGUS_URL` and a key per check (`ARGUS_KEY_CLOCKIN`, …) from `.env`;
+  without them it sends nothing. It can't fail or hold up a check (5 s limit, errors ignored).
 - **Pushes:** `/root/.ssh/aegis_deploy_ed25519` is a deploy key with write access to this
   repo, used through each checkout's `core.sshCommand`.
 

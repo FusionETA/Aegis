@@ -26,6 +26,12 @@ mkdir -p logs
 LOG="logs/${ACTION//\//-}.log"
 TS="$(date '+%Y-%m-%d %H:%M:%S %Z')"
 
+# Argus (https://argus.fusioneta.com.my) shows every run, if ARGUS_URL and the check's
+# ARGUS_KEY_<ACTION> are in .env (core/argus.js). It can't fail or hold up a check: a hard
+# 5 s limit, and any error is ignored.
+ARGUS_RUN="${ACTION//\//-}-$(date '+%Y%m%d-%H%M%S')"
+argus() { timeout 5 "$NODE" core/argus.js "$1" "$ACTION" "$ARGUS_RUN" "${2:-}" "$LOG" >/dev/null 2>&1 || true; }
+
 # Paused from the Aegis console (config/paused/<app>-<action> exists): log one line, run nothing.
 if [[ -e "config/paused/${ACTION//\//-}" ]]; then
   echo "===== ${ACTION} @ ${TS}: paused in the console, skipped =====" >> "$LOG"
@@ -59,6 +65,7 @@ run_once() {
 }
 
 echo "===== ${ACTION} @ ${TS} =====" >> "$LOG"
+argus start
 # Capture the exit code instead of letting set -e abort, so failed runs still
 # get their footer line; then pass the code through to cron.
 RC=0
@@ -66,9 +73,11 @@ run_once 1 || RC=$?
 if [[ "$RC" -ne 0 && "$ATTEMPTS" -gt 1 ]]; then
   FIRST_FAILED_AT="$(date '+%H:%M')"
   echo "----- ${ACTION} failed (exit ${RC}); retrying in ${DELAY}s -----" >> "$LOG"
+  argus retry "$RC"
   sleep "$DELAY"
   RC=0
   run_once 2 || RC=$?
 fi
 echo "===== ${ACTION} exit ${RC} @ $(date '+%H:%M:%S %Z') =====" >> "$LOG"
+argus end "$RC"
 exit "$RC"
